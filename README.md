@@ -3,7 +3,7 @@
 
 ## Как это работает
 ```
-Telegram Desktop → MTProto Proxy (127.0.0.1:1443) → WebSocket → Telegram DC
+Telegram Desktop → MTProto Proxy (192.168.1.1:1443) → WebSocket → Telegram DC
 ```
 
 1. Приложение поднимает MTProto прокси на `192.168.1.1:1443`
