@@ -30,6 +30,7 @@ chmod +x /opt/bin/twpm.sh
 - Скачает и распакует прокси
 - Сгенерирует секретный ключ
 - Найдет свободный порт
+- Автоматическое добавление в автозагрузку роутера
 - Запустит сервис
 
 <img width="642" height="386" alt="menu" src="https://github.com/user-attachments/assets/3e1985bf-d445-4fd3-adef-353c280964c4" />
