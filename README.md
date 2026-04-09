@@ -12,6 +12,9 @@ Telegram Desktop → MTProto Proxy (192.168.1.1:1443) → WebSocket → Telegram
 4. Устанавливает WebSocket (TLS) соединение к соответствующему DC через домены Telegram
 5. Если WS недоступен (302 redirect) — автоматически переключается на CfProxy / прямое TCP-соединение
 
+
+<img width="355" height="447" alt="telegram" src="https://github.com/user-attachments/assets/5c52b339-b8b7-4def-bc85-aa352e71a569" />
+
 ## Быстрая установка
 ```bash
 # Скачиваем скрипт
@@ -28,6 +31,8 @@ chmod +x /opt/bin/twpm.sh
 - Сгенерирует секретный ключ
 - Найдет свободный порт
 - Запустит сервис
+
+<img width="642" height="386" alt="menu" src="https://github.com/user-attachments/assets/3e1985bf-d445-4fd3-adef-353c280964c4" />
 
 ## Управление через консоль
 ```bash
