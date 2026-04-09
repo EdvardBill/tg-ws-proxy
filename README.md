@@ -44,5 +44,4 @@ BIN_PATH="/opt/bin/tg-ws-proxy"           # Исполняемый файл
 INIT_PATH="/opt/etc/init.d/S99tgwsproxy"  # Init-скрипт
 SECRET_FILE="/opt/home/admin/proxy_secret.txt"    # Секретный ключ
 LOG_FILE="/var/log/tg-ws-proxy.log"      # Лог-файл
-REPO_URL="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip"
 ```
