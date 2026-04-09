@@ -6,7 +6,7 @@
 Telegram Desktop → MTProto Proxy (192.168.1.1:1443) → WebSocket → Telegram DC
 ```
 
-1. Приложение поднимает MTProto прокси на `192.168.1.1:1443`
+1. Скрипт поднимает MTProto прокси на `192.168.1.1:1443`
 2. Перехватывает подключения к IP-адресам Telegram
 3. Извлекает DC ID из MTProto obfuscation init-пакета
 4. Устанавливает WebSocket (TLS) соединение к соответствующему DC через домены Telegram
