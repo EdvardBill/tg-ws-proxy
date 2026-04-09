@@ -6,7 +6,7 @@
 Telegram Desktop → MTProto Proxy (127.0.0.1:1443) → WebSocket → Telegram DC
 ```
 
-##Быстрая установка
+## Быстрая установка
 ```bash
 # Скачиваем скрипт
 wget -O /opt/bin/twpm.sh https://raw.githubusercontent.com/EdvardBill/tg-ws-proxy/main/twpm.sh
@@ -23,7 +23,7 @@ chmod +x /opt/bin/twpm.sh
 Найдет свободный порт
 Запустит сервис
 
-##Управление через консоль
+## Управление через консоль
 ```bash
 # Запуск прокси
 /opt/etc/init.d/S99tgwsproxy start
