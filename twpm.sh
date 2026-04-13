@@ -9,7 +9,6 @@ BLUE="\033[0;34m"
 NC="\033[0m"
 
 REPO_URL="https://raw.githubusercontent.com/EdvardBill/tg-ws-proxy/main"
-PROXY_REPO_URL="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip"
 
 BIN_PATH="/opt/bin/tg-ws-proxy"
 INIT_PATH="/opt/etc/init.d/S99tgwsproxy"
@@ -18,15 +17,11 @@ INFO_FILE="/opt/home/admin/proxy_info.txt"
 LOG_FILE="/var/log/tg-ws-proxy.log"
 WEB_SERVER="/tmp/web.py"
 
-if [ -d "/opt/home/admin" ]; then
-    HOME_DIR="/opt/home/admin"
-elif [ -d "/root" ]; then
-    HOME_DIR="/root"
-else
-    HOME_DIR="/opt"
-fi
+PROXY_REPO_URL="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip"
 
+HOME_DIR="/opt/home/admin"
 PROXY_DIR="$HOME_DIR/tg-ws-proxy"
+
 export PATH="/opt/bin:/opt/sbin:/opt/usr/bin:/usr/bin:/bin:/sbin:$PATH"
 
 PAUSE() {
@@ -41,11 +36,6 @@ check_entware() {
         return 1
     fi
     return 0
-}
-
-refresh_path() {
-    export PATH="/opt/bin:/opt/sbin:/opt/usr/bin:/usr/bin:/bin:/sbin:$PATH"
-    hash -r 2>/dev/null
 }
 
 install_python() {
@@ -63,7 +53,6 @@ install_python() {
         refresh_path
         PYTHON_CMD="/opt/bin/python3"
     fi
-    opkg install python3-cryptography > /dev/null 2>&1
     return 0
 }
 
@@ -109,19 +98,8 @@ stop_all_proxy() {
     sleep 2
 }
 
-download_web_interface() {
-    echo -e "${CYAN}Скачиваем веб-интерфейс управления...${NC}"
-    wget -q --no-check-certificate -O "$WEB_SERVER" "$REPO_URL/src/web.py"
-    if [ ! -f "$WEB_SERVER" ]; then
-        echo -e "${RED}Ошибка: не удалось скачать веб-интерфейс${NC}"
-        return 1
-    fi
-    chmod +x "$WEB_SERVER"
-    echo -e "${GREEN}Веб-интерфейс загружен${NC}"
-}
-
 download_init_script() {
-    echo -e "${CYAN}Скачиваем init-скрипт...${NC}"
+    echo -e "${CYAN}Скачиваем init-скрипт из Git...${NC}"
     wget -q --no-check-certificate -O "$INIT_PATH" "$REPO_URL/init/S99tgwsproxy"
     if [ ! -f "$INIT_PATH" ]; then
         echo -e "${RED}Ошибка: не удалось скачать init-скрипт${NC}"
@@ -131,8 +109,21 @@ download_init_script() {
     echo -e "${GREEN}Init-скрипт загружен${NC}"
 }
 
+download_web_interface() {
+    echo -e "${CYAN}Скачиваем веб-интерфейс из Git...${NC}"
+    wget -q --no-check-certificate -O "$WEB_SERVER" "$REPO_URL/src/web.py"
+    if [ ! -f "$WEB_SERVER" ]; then
+        echo -e "${RED}Ошибка: не удалось скачать веб-интерфейс${NC}"
+        return 1
+    fi
+    chmod +x "$WEB_SERVER"
+    echo -e "${GREEN}Веб-интерфейс загружен${NC}"
+}
+
 install_proxy() {
+    echo -e "\n${MAGENTA}════════════════════════════════════════${NC}"
     echo -e "${MAGENTA}     УСТАНОВКА TG WS PROXY${NC}"
+    echo -e "${MAGENTA}════════════════════════════════════════${NC}"
     
     check_entware || return 1
     stop_all_proxy
@@ -140,28 +131,23 @@ install_proxy() {
     mkdir -p "$(dirname "$SECRET_FILE")"
     mkdir -p "$(dirname "$INFO_FILE")"
     mkdir -p "$(dirname "$LOG_FILE")"
+    mkdir -p /opt/etc/init.d
     
     install_python || return 1
     install_unzip || return 1
     install_wget || return 1
     refresh_path
     
-    echo -e "${CYAN}Подготовка к установке...${NC}"
+    echo -e "${CYAN}Скачиваем TG WS Proxy из репозитория Flowseal...${NC}"
+    cd "$HOME_DIR" || return 1
     rm -rf "$PROXY_DIR"
-    rm -f "$BIN_PATH"
     
-    echo -e "${CYAN}Скачиваем TG WS Proxy из репозитория...${NC}"
- cd "$HOME_DIR" || return 1
     if ! wget --no-check-certificate -q --timeout=30 -O tg-ws-proxy.zip "$PROXY_REPO_URL" 2>/dev/null; then
-        if ! curl -k -L --connect-timeout 30 -s -o tg-ws-proxy.zip "$PROXY_REPO_URL"; then
-            echo -e "${RED}Ошибка скачивания!${NC}"
-            PAUSE
-            return 1
-        fi
+        curl -k -L --connect-timeout 30 -s -o tg-ws-proxy.zip "$PROXY_REPO_URL"
     fi
     
-    if [ ! -f "tg-ws-proxy.zip" ] || [ ! -s "tg-ws-proxy.zip" ]; then
-        echo -e "${RED}Ошибка: файл не скачан или пустой${NC}"
+    if [ ! -f "tg-ws-proxy.zip" ]; then
+        echo -e "${RED}Ошибка скачивания!${NC}"
         PAUSE
         return 1
     fi
@@ -169,9 +155,11 @@ install_proxy() {
     echo -e "${CYAN}Распаковываем...${NC}"
     unzip -o tg-ws-proxy.zip > /dev/null 2>&1
     
-if [ -d "tg-ws-proxy-main" ]; then
+    # Исправлено: сначала проверяем main, потом master
+    if [ -d "tg-ws-proxy-main" ]; then
         mv tg-ws-proxy-main tg-ws-proxy
-        PROXY_DIR="$HOME_DIR/tg-ws-proxy"
+    elif [ -d "tg-ws-proxy-master" ]; then
+        mv tg-ws-proxy-master tg-ws-proxy
     else
         echo -e "${RED}Ошибка: не найдена папка с прокси${NC}"
         PAUSE
@@ -179,13 +167,8 @@ if [ -d "tg-ws-proxy-main" ]; then
     fi
     
     rm -f tg-ws-proxy.zip
-    cd "$PROXY_DIR" || return 1
     
-    echo -e "${CYAN}Устанавливаем модуль...${NC}"
-    SITE_PACKAGES=$($PYTHON_CMD -c "import site; print(site.getsitepackages()[0])" 2>/dev/null)
-    if [ -n "$SITE_PACKAGES" ]; then
-        cp -r proxy "$SITE_PACKAGES/"
-    fi
+    cd "$PROXY_DIR" || return 1
     
     SECRET=$(generate_secret)
     echo "$SECRET" > "$SECRET_FILE"
@@ -205,13 +188,15 @@ if [ -d "tg-ws-proxy-main" ]; then
 /opt/etc/init.d/S99tgwsproxy start
 python3 /tmp/web.py &
 EOF
-        chmod +x /etc/storage/started_script.sh 2>/dev/null
-        /sbin/mtd_storage.sh save > /dev/null 2>&1
+        chmod +x /etc/storage/started_script.sh
+        /sbin/mtd_storage.sh save
     fi
     
-    sleep 3
+    sleep 2
     if pgrep -f "proxy.tg_ws_proxy" > /dev/null 2>&1; then
+        echo -e "\n${GREEN}════════════════════════════════════════${NC}"
         echo -e "${GREEN}        УСТАНОВКА УСПЕШНО ЗАВЕРШЕНА!${NC}"
+        echo -e "${GREEN}════════════════════════════════════════${NC}"
         echo -e "\n${CYAN}Веб-интерфейс:${NC} http://$(get_router_ip):8081"
         echo -e "${CYAN}Порт прокси:${NC} 1443"
         echo -e "${CYAN}Ключ:${NC} dd$SECRET"
@@ -239,14 +224,8 @@ delete_proxy() {
     rm -f "$INIT_PATH"
     rm -f "$SECRET_FILE"
     rm -f "$INFO_FILE"
-    rm -f "$HOME_DIR/tg-ws-proxy.zip"
     rm -f "$LOG_FILE"
     rm -f "$WEB_SERVER"
-    
-    SITE_PACKAGES=$($PYTHON_CMD -c "import site; print(site.getsitepackages()[0])" 2>/dev/null)
-    if [ -n "$SITE_PACKAGES" ]; then
-        rm -rf "$SITE_PACKAGES/proxy" 2>/dev/null
-    fi
     
     echo -e "${CYAN}Удаляем из автозапуска...${NC}"
     sed -i '/TG WS Proxy/d' /etc/storage/started_script.sh 2>/dev/null
@@ -258,9 +237,9 @@ delete_proxy() {
     echo -e "${CYAN}Удаляем скрипт...${NC}"
     rm -f "$0"
     
+    echo -e "\n${GREEN}════════════════════════════════════════${NC}"
     echo -e "${GREEN}        УДАЛЕНИЕ ЗАВЕРШЕНО!${NC}"
-    echo -e "${YELLOW}Скрипт удален. Нажмите Enter для выхода...${NC}"
-    read dummy
+    echo -e "${GREEN}════════════════════════════════════════${NC}"
     exit 0
 }
 
@@ -281,11 +260,10 @@ restart_proxy() {
 }
 
 menu() {
-    refresh_path
     clear
     echo -e "${BLUE}╔════════════════════════════════════════╗${NC}"
     echo -e "${BLUE}║         TG WS Proxy для Padavan        ║${NC}"
-    echo -e "${BLUE}║                       by save55        ║${NC}"
+    echo -e "${BLUE}║                    by save55           ║${NC}"
     echo -e "${BLUE}╚════════════════════════════════════════╝${NC}"
     
     if pgrep -f "proxy.tg_ws_proxy" > /dev/null 2>&1; then
@@ -313,15 +291,8 @@ menu() {
         1) install_proxy ;;
         2) delete_proxy ;;
         3) restart_proxy ;;
-        0)
-            clear
-            echo -e "${GREEN}До свидания!${NC}"
-            exit 0
-            ;;
-        *)
-            echo -e "\n${RED}Неверный выбор!${NC}"
-            PAUSE
-            ;;
+        0) exit 0 ;;
+        *) PAUSE ;;
     esac
 }
 
