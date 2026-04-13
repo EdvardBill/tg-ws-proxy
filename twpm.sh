@@ -169,8 +169,8 @@ install_proxy() {
     echo -e "${CYAN}Распаковываем...${NC}"
     unzip -o tg-ws-proxy.zip > /dev/null 2>&1
     
-if [ -d "tg-ws-proxy-master" ]; then
-        mv tg-ws-proxy-master tg-ws-proxy
+if [ -d "tg-ws-proxy-main" ]; then
+        mv tg-ws-proxy-main tg-ws-proxy
         PROXY_DIR="$HOME_DIR/tg-ws-proxy"
     else
         echo -e "${RED}Ошибка: не найдена папка с прокси${NC}"
