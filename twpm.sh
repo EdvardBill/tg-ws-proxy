@@ -50,7 +50,6 @@ install_python() {
         echo -e "${YELLOW}Python не найден. Устанавливаем...${NC}"
         opkg update > /dev/null 2>&1
         opkg install python3 python3-pip python3-dev > /dev/null 2>&1
-        refresh_path
         PYTHON_CMD="/opt/bin/python3"
     fi
     return 0
@@ -100,24 +99,101 @@ stop_all_proxy() {
 
 download_init_script() {
     echo -e "${CYAN}Скачиваем init-скрипт из Git...${NC}"
+    mkdir -p /opt/etc/init.d
     wget -q --no-check-certificate -O "$INIT_PATH" "$REPO_URL/init/S99tgwsproxy"
     if [ ! -f "$INIT_PATH" ]; then
-        echo -e "${RED}Ошибка: не удалось скачать init-скрипт${NC}"
-        return 1
+        echo -e "${YELLOW}Не удалось скачать, создаём вручную...${NC}"
+        cat > "$INIT_PATH" << 'EOF'
+#!/bin/sh
+SECRET=$(cat /opt/home/admin/proxy_secret.txt 2>/dev/null)
+cd /opt/home/admin/tg-ws-proxy
+
+start() {
+    python3 -m proxy.tg_ws_proxy --host 0.0.0.0 --port 1443 --secret $SECRET > /var/log/tg-ws-proxy.log 2>&1 &
+    echo $! > /var/run/tg-ws-proxy.pid
+}
+
+stop() {
+    kill -9 $(cat /var/run/tg-ws-proxy.pid) 2>/dev/null
+    pkill -f "proxy.tg_ws_proxy"
+    rm -f /var/run/tg-ws-proxy.pid
+}
+
+case "$1" in
+    start) start ;;
+    stop) stop ;;
+    restart) stop; sleep 2; start ;;
+    *) exit 1 ;;
+esac
+EOF
     fi
     chmod +x "$INIT_PATH"
-    echo -e "${GREEN}Init-скрипт загружен${NC}"
+    echo -e "${GREEN}Init-скрипт готов${NC}"
 }
 
 download_web_interface() {
     echo -e "${CYAN}Скачиваем веб-интерфейс из Git...${NC}"
     wget -q --no-check-certificate -O "$WEB_SERVER" "$REPO_URL/src/web.py"
     if [ ! -f "$WEB_SERVER" ]; then
-        echo -e "${RED}Ошибка: не удалось скачать веб-интерфейс${NC}"
-        return 1
+        echo -e "${YELLOW}Не удалось скачать, создаём вручную...${NC}"
+        cat > "$WEB_SERVER" << 'EOF'
+#!/usr/bin/env python3
+import subprocess, json
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+HTML='''<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>TG WS Proxy</title>
+<style>
+body{font-family:Arial;margin:20px;background:#f0f0f0}
+.container{max-width:600px;margin:auto;background:white;padding:20px;border-radius:10px;text-align:center}
+button{padding:10px 20px;margin:5px;cursor:pointer}
+.start{background:green;color:white;border:none}
+.stop{background:red;color:white;border:none}
+.restart{background:orange;border:none}
+.status{padding:10px;margin:10px 0}
+.running{background:lightgreen}
+.stopped{background:pink}
+</style>
+</head>
+<body>
+<div class=container>
+<h2>TG WS Proxy</h2>
+<div id=status class=status>Loading...</div>
+<button class=start onclick="fetch('/start')">START</button>
+<button class=stop onclick="fetch('/stop')">STOP</button>
+<button class=restart onclick="fetch('/restart')">RESTART</button>
+</div>
+<script>
+function u(){fetch('/status').then(r=>r.json()).then(d=>{var s=document.getElementById('status');if(d.running){s.className='status running';s.innerHTML='RUNNING'}else{s.className='status stopped';s.innerHTML='STOPPED'}})}
+setInterval(u,2000);u();
+</script>
+</body>
+</html>'''
+
+class H(BaseHTTPRequestHandler):
+    def do_GET(s):
+        s.send_response(200)
+        if s.path=='/':
+            s.send_header('Content-Type','text/html')
+            s.end_headers()
+            s.wfile.write(HTML.encode())
+        elif s.path=='/status':
+            s.send_header('Content-Type','application/json')
+            s.end_headers()
+            r=subprocess.run(['pgrep','-f','proxy.tg_ws_proxy'],capture_output=True)
+            s.wfile.write(json.dumps({'running':r.returncode==0}).encode())
+        elif s.path in ('/start','/stop','/restart'):
+            s.end_headers()
+            subprocess.run(['/opt/etc/init.d/S99tgwsproxy',s.path[1:]])
+            s.wfile.write(b'<script>location.href="/"</script>')
+    def log_message(s,*a):pass
+
+HTTPServer(('0.0.0.0',8081),H).serve_forever()
+EOF
     fi
     chmod +x "$WEB_SERVER"
-    echo -e "${GREEN}Веб-интерфейс загружен${NC}"
+    echo -e "${GREEN}Веб-интерфейс готов${NC}"
 }
 
 install_proxy() {
@@ -136,7 +212,6 @@ install_proxy() {
     install_python || return 1
     install_unzip || return 1
     install_wget || return 1
-    refresh_path
     
     echo -e "${CYAN}Скачиваем TG WS Proxy из репозитория Flowseal...${NC}"
     cd "$HOME_DIR" || return 1
@@ -155,7 +230,6 @@ install_proxy() {
     echo -e "${CYAN}Распаковываем...${NC}"
     unzip -o tg-ws-proxy.zip > /dev/null 2>&1
     
-    # Исправлено: сначала проверяем main, потом master
     if [ -d "tg-ws-proxy-main" ]; then
         mv tg-ws-proxy-main tg-ws-proxy
     elif [ -d "tg-ws-proxy-master" ]; then
@@ -173,8 +247,8 @@ install_proxy() {
     SECRET=$(generate_secret)
     echo "$SECRET" > "$SECRET_FILE"
     
-    download_init_script || return 1
-    download_web_interface || return 1
+    download_init_script
+    download_web_interface
     
     echo -e "${CYAN}Запускаем сервисы...${NC}"
     $INIT_PATH start
