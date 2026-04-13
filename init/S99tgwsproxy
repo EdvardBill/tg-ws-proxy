@@ -1,42 +1,21 @@
 #!/bin/sh
-
-PROC_NAME="proxy.tg_ws_proxy"
-LOG_FILE="/var/log/tg-ws-proxy.log"
-PID_FILE="/var/run/tg-ws-proxy.pid"
 SECRET=$(cat /opt/home/admin/proxy_secret.txt 2>/dev/null)
+cd /opt/home/admin/tg-ws-proxy
 
 start() {
-    echo "Starting TG WS Proxy..."
-    cd /opt/home/admin/tg-ws-proxy
-    python3 -m proxy.tg_ws_proxy --host 0.0.0.0 --port 1443 --secret $SECRET > $LOG_FILE 2>&1 &
-    echo $! > $PID_FILE
-    echo "Started PID: $(cat $PID_FILE)"
+    python3 -m proxy.tg_ws_proxy --host 0.0.0.0 --port 1443 --secret $SECRET > /var/log/tg-ws-proxy.log 2>&1 &
+    echo $! > /var/run/tg-ws-proxy.pid
 }
 
 stop() {
-    echo "Stopping TG WS Proxy..."
-    if [ -f $PID_FILE ]; then
-        PID=$(cat $PID_FILE)
-        kill -9 $PID 2>/dev/null
-        rm -f $PID_FILE
-    fi
-    kill -9 $(ps | grep "$PROC_NAME" | grep -v grep | awk '{print $1}') 2>/dev/null
-    echo "Stopped"
+    kill -9 $(cat /var/run/tg-ws-proxy.pid) 2>/dev/null
+    pkill -f "proxy.tg_ws_proxy"
+    rm -f /var/run/tg-ws-proxy.pid
 }
 
 case "$1" in
-    start)
-        start
-        ;;
-    stop)
-        stop
-        ;;
-    restart)
-        stop
-        sleep 2
-        start
-        ;;
-    *)
-        exit 1
-        ;;
+    start) start ;;
+    stop) stop ;;
+    restart) stop; sleep 2; start ;;
+    *) exit 1 ;;
 esac
