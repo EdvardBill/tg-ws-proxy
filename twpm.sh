@@ -1,4 +1,5 @@
 #!/bin/sh
+# TG WS Proxy Manager for Padavan
 
 GREEN="\033[1;32m"
 YELLOW="\033[1;33m"
