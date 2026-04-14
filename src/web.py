@@ -88,89 +88,464 @@ def _request_path(handler):
 
 
 HTML = """<!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#28a745">
 <title>TG WS Proxy</title>
 <style>
-body{font-family:Arial;margin:20px;background:#f0f0f0}
-.container{max-width:600px;margin:auto;background:white;padding:20px;border-radius:10px;text-align:center}
-h2{color:#333;border-bottom:2px solid #28a745;padding-bottom:10px;margin-top:0}
-button{padding:12px 24px;margin:5px;font-size:16px;cursor:pointer;border:none;border-radius:5px}
-.start{background:#28a745;color:white}
-.start:hover{background:#218838}
-.stop{background:#dc3545;color:white}
-.stop:hover{background:#c82333}
-.restart{background:#ffc107;color:#333}
-.restart:hover{background:#e0a800}
-.status{padding:15px;margin:15px 0;border-radius:8px;text-align:center;font-weight:bold;font-size:16px}
-.running{background:#d4edda;color:#155724;border:1px solid #c3e6cb}
-.stopped{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb}
-.info{background:#e9ecef;padding:15px;border-radius:8px;margin:15px 0;text-align:left}
-.row{padding:8px 0;border-bottom:1px solid #dee2e6}
-.label{font-weight:bold;display:inline-block;width:70px}
-.value{font-family:monospace}
-.instruction{background:#e8f4f8;padding:15px;border-radius:8px;margin:15px 0;text-align:left}
-.footer{text-align:center;margin-top:20px;color:#6c757d;font-size:12px}
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 16px;
+    margin: 0;
+}
+
+.container {
+    max-width: 500px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 24px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    overflow: hidden;
+    animation: slideUp 0.4s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.header {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    padding: 24px 20px;
+    text-align: center;
+}
+
+.header h1 {
+    color: white;
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.header p {
+    color: rgba(255,255,255,0.9);
+    font-size: 14px;
+}
+
+.content {
+    padding: 24px 20px;
+}
+
+.status-card {
+    background: #f8f9fa;
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 24px;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.status-card.running {
+    background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+    border: 1px solid #28a745;
+}
+
+.status-card.stopped {
+    background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+    border: 1px solid #dc3545;
+}
+
+.status-icon {
+    font-size: 48px;
+    margin-bottom: 8px;
+}
+
+.status-text {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.status-pid {
+    font-size: 12px;
+    opacity: 0.7;
+    font-family: monospace;
+}
+
+.button-group {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+}
+
+.button-group button {
+    flex: 1;
+    min-width: 100px;
+    padding: 14px 20px;
+    font-size: 16px;
+    font-weight: 600;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+    color: white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.button-group button:active {
+    transform: scale(0.97);
+}
+
+.btn-start {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+}
+
+.btn-stop {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+}
+
+.btn-restart {
+    background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);
+    color: #333;
+}
+
+.info-card {
+    background: #f8f9fa;
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 24px;
+}
+
+.info-card h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: #333;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.info-row {
+    display: flex;
+    flex-wrap: wrap;
+    padding: 12px 0;
+    border-bottom: 1px solid #e0e0e0;
+    align-items: flex-start;
+}
+
+.info-row:last-child {
+    border-bottom: none;
+}
+
+.info-label {
+    font-weight: 600;
+    width: 70px;
+    flex-shrink: 0;
+    color: #666;
+    font-size: 14px;
+}
+
+.info-value {
+    flex: 1;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    word-break: break-all;
+    color: #333;
+    background: white;
+    padding: 4px 8px;
+    border-radius: 6px;
+}
+
+.info-link {
+    flex: 1;
+    word-break: break-all;
+}
+
+.info-link a {
+    color: #28a745;
+    text-decoration: none;
+    font-size: 12px;
+    background: white;
+    padding: 4px 8px;
+    border-radius: 6px;
+    display: inline-block;
+}
+
+.instruction {
+    background: #e8f4f8;
+    border-radius: 16px;
+    padding: 20px;
+    border-left: 4px solid #28a745;
+}
+
+.instruction h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: #333;
+}
+
+.instruction ol {
+    padding-left: 20px;
+}
+
+.instruction li {
+    margin: 8px 0;
+    font-size: 13px;
+    color: #555;
+    line-height: 1.5;
+}
+
+.instruction b {
+    color: #28a745;
+}
+
+.footer {
+    text-align: center;
+    padding: 20px;
+    background: #f8f9fa;
+    font-size: 11px;
+    color: #999;
+    border-top: 1px solid #e0e0e0;
+}
+
+@media (max-width: 480px) {
+    body {
+        padding: 8px;
+    }
+    
+    .content {
+        padding: 16px;
+    }
+    
+    .button-group button {
+        padding: 12px 16px;
+        font-size: 14px;
+    }
+    
+    .info-label {
+        width: 60px;
+        font-size: 12px;
+    }
+    
+    .info-value {
+        font-size: 11px;
+    }
+}
+
+@media (max-width: 380px) {
+    .button-group {
+        flex-direction: column;
+    }
+    
+    .button-group button {
+        width: 100%;
+    }
+}
+
+.loading {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #28a745;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-left: 8px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.copy-btn {
+    background: #28a745;
+    color: white;
+    border: none;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    margin-left: 8px;
+}
+
+.toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 12px;
+    z-index: 1000;
+    animation: fadeOut 2s ease-out forwards;
+}
+
+@keyframes fadeOut {
+    0% { opacity: 1; }
+    70% { opacity: 1; }
+    100% { opacity: 0; visibility: hidden; }
+}
 </style>
 </head>
 <body>
 <div class="container">
-<h2>TG WS Proxy</h2>
-<div id="status" class="status stopped">Проверка статуса...</div>
-<div>
-<button class="start" onclick="location.href='/start'">ЗАПУСТИТЬ</button>
-<button class="stop" onclick="location.href='/stop'">ОСТАНОВИТЬ</button>
-<button class="restart" onclick="location.href='/restart'">ПЕРЕЗАПУСТИТЬ</button>
+    <div class="header">
+        <h1>🚀 TG WS Proxy</h1>
+        <p>WebSocket MTProto Proxy</p>
+    </div>
+    
+    <div class="content">
+        <div id="statusCard" class="status-card stopped">
+            <div class="status-icon">⏳</div>
+            <div class="status-text">Загрузка...</div>
+            <div class="status-pid"></div>
+        </div>
+        
+        <div class="button-group">
+            <button class="btn-start" onclick="sendAction('start')">▶ Запустить</button>
+            <button class="btn-stop" onclick="sendAction('stop')">⏹ Остановить</button>
+            <button class="btn-restart" onclick="sendAction('restart')">🔄 Перезапустить</button>
+        </div>
+        
+        <div id="infoCard" class="info-card" style="display:none;">
+            <h3>📡 Данные для подключения</h3>
+            <div class="info-row">
+                <div class="info-label">🌐 Хост:</div>
+                <div id="host" class="info-value">-</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">🔌 Порт:</div>
+                <div id="port" class="info-value">-</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">🔑 Ключ:</div>
+                <div id="secret" class="info-value">-</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">🔗 Ссылка:</div>
+                <div id="link" class="info-link">-</div>
+            </div>
+        </div>
+        
+        <div class="instruction">
+            <h3>📖 Инструкция для Telegram</h3>
+            <ol>
+                <li>Нажмите <b>▶ Запустить</b></li>
+                <li>Настройки → Данные и память → Прокси</li>
+                <li>Добавить прокси → тип <b>MTProto</b></li>
+                <li>Введите хост, порт и ключ (с префиксом <b>dd</b>)</li>
+                <li>Или просто нажмите на ссылку выше</li>
+            </ol>
+        </div>
+    </div>
+    
+    <div class="footer">
+        TG WS Proxy | WebSocket Proxy
+    </div>
 </div>
-<div class="info">
-<h3 style="margin-top:0">Данные для подключения</h3>
-<div class="row"><span class="label">Хост:</span> <span id="host" class="value">-</span></div>
-<div class="row"><span class="label">Порт:</span> <span id="port" class="value">-</span></div>
-<div class="row"><span class="label">Ключ:</span> <span id="secret" class="value">-</span></div>
-<div class="row"><span class="label">Ссылка:</span> <span id="link" class="value">-</span></div>
-</div>
-<div class="instruction">
-<b>Инструкция для Telegram:</b><br>
-1. Нажмите <b>ЗАПУСТИТЬ</b><br>
-2. Настройки → Данные и память → Прокси<br>
-3. Добавить прокси → тип <b>MTProto</b><br>
-4. Хост, порт и ключ (с префиксом <b>dd</b>)
-</div>
-<div class="footer">
-TG WS Proxy | WebSocket
-</div>
-</div>
+
 <script>
-function update(){
- fetch('/status')
-   .then(r=>r.json())
-   .then(d=>{
-     var s=document.getElementById('status');
-     if(d.running){
-       s.className='status running';
-       s.innerHTML='РАБОТАЕТ (PID: '+d.pid+')';
-       document.getElementById('host').innerText=d.host;
-       document.getElementById('port').innerText=d.port;
-       document.getElementById('secret').innerText='dd'+d.secret;
-       var link='tg://proxy?server='+d.host+'&port='+d.port+'&secret=dd'+d.secret;
-       document.getElementById('link').innerHTML='<a href="'+link+'" target="_blank">'+link+'</a>';
-     }else{
-       s.className='status stopped';
-       s.innerHTML='НЕ РАБОТАЕТ';
-       document.getElementById('host').innerText='-';
-       document.getElementById('port').innerText='-';
-       document.getElementById('secret').innerText='-';
-       document.getElementById('link').innerText='-';
-     }
-   });
+function showToast(message) {
+    let toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 2000);
 }
-setInterval(update,2000);
+
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        showToast('✅ Скопировано!');
+    });
+}
+
+function sendAction(action) {
+    fetch('/' + action)
+        .then(() => {
+            showToast('🔄 Выполняется ' + action + '...');
+            setTimeout(update, 500);
+        })
+        .catch(() => {
+            showToast('❌ Ошибка при выполнении');
+        });
+}
+
+function update() {
+    fetch('/status')
+        .then(r => r.json())
+        .then(d => {
+            let statusCard = document.getElementById('statusCard');
+            let infoCard = document.getElementById('infoCard');
+            
+            if (d.running) {
+                statusCard.className = 'status-card running';
+                statusCard.innerHTML = `
+                    <div class="status-icon">✅</div>
+                    <div class="status-text">РАБОТАЕТ</div>
+                    <div class="status-pid">PID: ${d.pid}</div>
+                `;
+                
+                infoCard.style.display = 'block';
+                let fullSecret = 'dd' + d.secret;
+                
+                document.getElementById('host').innerHTML = d.host + `<button class="copy-btn" onclick="copyToClipboard('${d.host}')">Копировать</button>`;
+                document.getElementById('port').innerHTML = d.port + `<button class="copy-btn" onclick="copyToClipboard('${d.port}')">Копировать</button>`;
+                document.getElementById('secret').innerHTML = fullSecret + `<button class="copy-btn" onclick="copyToClipboard('${fullSecret}')">Копировать</button>`;
+                
+                let link = 'tg://proxy?server=' + d.host + '&port=' + d.port + '&secret=' + fullSecret;
+                document.getElementById('link').innerHTML = `<a href="${link}" target="_blank">📱 Нажмите для подключения</a><button class="copy-btn" onclick="copyToClipboard('${link}')">Копировать ссылку</button>`;
+            } else {
+                statusCard.className = 'status-card stopped';
+                statusCard.innerHTML = `
+                    <div class="status-icon">❌</div>
+                    <div class="status-text">НЕ РАБОТАЕТ</div>
+                    <div class="status-pid"></div>
+                `;
+                infoCard.style.display = 'none';
+            }
+        })
+        .catch(() => {
+            let statusCard = document.getElementById('statusCard');
+            statusCard.className = 'status-card stopped';
+            statusCard.innerHTML = `
+                <div class="status-icon">⚠️</div>
+                <div class="status-text">Ошибка связи</div>
+                <div class="status-pid"></div>
+            `;
+        });
+}
+
+setInterval(update, 3000);
 update();
 </script>
 </body>
 </html>"""
-
 
 
 class ReuseHTTPServer(HTTPServer):
@@ -217,7 +592,6 @@ class H(BaseHTTPRequestHandler):
         if path in ("/start", "/stop", "/restart"):
             action = path.lstrip("/")
             run_init(action)
-            # 302 надёжнее, чем HTML+script без Content-Type (кнопки в браузере «молчат»).
             self.send_response(302)
             self.send_header("Location", "/")
             self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
