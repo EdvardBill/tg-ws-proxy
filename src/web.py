@@ -1,10 +1,85 @@
 #!/usr/bin/env python3
-import subprocess
+# -*- coding: utf-8 -*-
 import json
 import os
+import subprocess
+import sys
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-HTML = '''<!DOCTYPE html>
+INIT_SCRIPT = "/opt/etc/init.d/S99tgwsproxy"
+PID_FILE = "/var/run/tg-ws-proxy.pid"
+SECRET_FILE = "/opt/home/admin/proxy_secret.txt"
+LISTEN_HOST = "0.0.0.0"
+LISTEN_PORT = 8081
+PROXY_CMD_MARK = "proxy.tg_ws_proxy"
+
+
+def get_lan_ip():
+    try:
+        r = subprocess.run(
+            ["nvram", "get", "lan_ipaddr"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        ip = (r.stdout or "").strip()
+        if ip:
+            return ip
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        pass
+    return "192.168.1.1"
+
+
+def _pid_alive(pid):
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def find_proxy_pid():
+    """Status without pgrep (often missing on BusyBox routers)."""
+    try:
+        with open(PID_FILE, encoding="utf-8", errors="ignore") as f:
+            pid = int(f.read().strip())
+        if _pid_alive(pid):
+            return str(pid)
+    except (OSError, ValueError):
+        pass
+
+    try:
+        r = subprocess.run(
+            ["pgrep", "-f", PROXY_CMD_MARK],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            return r.stdout.strip().split()[0]
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        pass
+
+    try:
+        r = subprocess.run(["ps"], capture_output=True, text=True, timeout=5)
+        for line in (r.stdout or "").splitlines():
+            if PROXY_CMD_MARK not in line or "grep" in line:
+                continue
+            parts = line.split()
+            for part in parts[:4]:
+                if part.isdigit() and _pid_alive(int(part)):
+                    return part
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError, ValueError):
+        pass
+
+    return None
+
+
+def run_init(action):
+    subprocess.run(["sh", INIT_SCRIPT, action], check=False)
+
+
+HTML = """<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
@@ -33,29 +108,29 @@ button{padding:12px 24px;margin:5px;font-size:16px;cursor:pointer;border:none;bo
 </head>
 <body>
 <div class="container">
-<h2>📡 TG WS Proxy</h2>
-<div id="status" class="status stopped">● Проверка статуса...</div>
+<h2>TG WS Proxy</h2>
+<div id="status" class="status stopped">Проверка статуса...</div>
 <div>
-<button class="start" onclick="location.href='/start'">▶ ЗАПУСТИТЬ</button>
-<button class="stop" onclick="location.href='/stop'">■ ОСТАНОВИТЬ</button>
-<button class="restart" onclick="location.href='/restart'">⟳ ПЕРЕЗАПУСТИТЬ</button>
+<button class="start" onclick="location.href='/start'">ЗАПУСТИТЬ</button>
+<button class="stop" onclick="location.href='/stop'">ОСТАНОВИТЬ</button>
+<button class="restart" onclick="location.href='/restart'">ПЕРЕЗАПУСТИТЬ</button>
 </div>
 <div class="info">
-<h3 style="margin-top:0">📋 Данные для подключения</h3>
+<h3 style="margin-top:0">Данные для подключения</h3>
 <div class="row"><span class="label">Хост:</span> <span id="host" class="value">-</span></div>
 <div class="row"><span class="label">Порт:</span> <span id="port" class="value">-</span></div>
 <div class="row"><span class="label">Ключ:</span> <span id="secret" class="value">-</span></div>
 <div class="row"><span class="label">Ссылка:</span> <span id="link" class="value">-</span></div>
 </div>
 <div class="instruction">
-<b>📖 Инструкция для Telegram:</b><br>
-1. Нажмите кнопку <b>ЗАПУСТИТЬ</b><br>
-2. Telegram: <b>Настройки → Данные и память → Прокси</b><br>
-3. Нажмите <b>Добавить прокси</b> → Тип <b>MTProto</b><br>
-4. Введите хост, порт и ключ (с <b>dd</b> в начале)
+<b>Инструкция для Telegram:</b><br>
+1. Нажмите <b>ЗАПУСТИТЬ</b><br>
+2. Настройки → Данные и память → Прокси<br>
+3. Добавить прокси → тип <b>MTProto</b><br>
+4. Хост, порт и ключ (с префиксом <b>dd</b>)
 </div>
 <div class="footer">
-TG WS Proxy | Работает через WebSocket
+TG WS Proxy | WebSocket
 </div>
 </div>
 <script>
@@ -66,15 +141,15 @@ function update(){
      var s=document.getElementById('status');
      if(d.running){
        s.className='status running';
-       s.innerHTML='✅ РАБОТАЕТ (PID: '+d.pid+')';
+       s.innerHTML='РАБОТАЕТ (PID: '+d.pid+')';
        document.getElementById('host').innerText=d.host;
        document.getElementById('port').innerText=d.port;
        document.getElementById('secret').innerText='dd'+d.secret;
        var link='tg://proxy?server='+d.host+'&port='+d.port+'&secret=dd'+d.secret;
-       document.getElementById('link').innerHTML='<a href=\"'+link+'\" target=\"_blank\">'+link+'</a>';
+       document.getElementById('link').innerHTML='<a href="'+link+'" target="_blank">'+link+'</a>';
      }else{
        s.className='status stopped';
-       s.innerHTML='❌ НЕ РАБОТАЕТ';
+       s.innerHTML='НЕ РАБОТАЕТ';
        document.getElementById('host').innerText='-';
        document.getElementById('port').innerText='-';
        document.getElementById('secret').innerText='-';
@@ -86,37 +161,58 @@ setInterval(update,2000);
 update();
 </script>
 </body>
-</html>'''
+</html>"""
+
+
+
+class ReuseHTTPServer(HTTPServer):
+    allow_reuse_address = True
+
 
 class H(BaseHTTPRequestHandler):
-    def do_GET(s):
-        s.send_response(200)
-        if s.path == '/':
-            s.send_header('Content-Type', 'text/html;charset=utf-8')
-            s.end_headers()
-            s.wfile.write(HTML.encode())
-        elif s.path == '/status':
-            s.send_header('Content-Type', 'application/json')
-            s.end_headers()
-            r = subprocess.run(['pgrep', '-f', 'proxy.tg_ws_proxy'], capture_output=True)
-            if r.returncode == 0:
-                pid = r.stdout.decode().split()[0]
-                ip = subprocess.run(['nvram', 'get', 'lan_ipaddr'], capture_output=True, text=True).stdout.strip() or '192.168.1.1'
-                sec = ''
-                if os.path.exists('/opt/home/admin/proxy_secret.txt'):
-                    with open('/opt/home/admin/proxy_secret.txt', 'r') as f:
+    def do_GET(self):
+        self.send_response(200)
+        if self.path == "/":
+            self.send_header("Content-Type", "text/html;charset=utf-8")
+            self.end_headers()
+            self.wfile.write(HTML.encode())
+        elif self.path == "/status":
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            pid = find_proxy_pid()
+            if pid:
+                ip = get_lan_ip()
+                sec = ""
+                if os.path.exists(SECRET_FILE):
+                    with open(SECRET_FILE, encoding="utf-8", errors="ignore") as f:
                         sec = f.read().strip()
-                s.wfile.write(json.dumps({'running': 1, 'pid': pid, 'host': ip, 'port': '1443', 'secret': sec}).encode())
+                self.wfile.write(
+                    json.dumps(
+                        {
+                            "running": 1,
+                            "pid": pid,
+                            "host": ip,
+                            "port": "1443",
+                            "secret": sec,
+                        }
+                    ).encode()
+                )
             else:
-                s.wfile.write(json.dumps({'running': 0}).encode())
-        elif s.path in ('/start', '/stop', '/restart'):
-            s.end_headers()
-            subprocess.run(['/opt/etc/init.d/S99tgwsproxy', s.path[1:]])
-            s.wfile.write(b'<script>location.href="/"</script>')
-    def log_message(s, *a):
+                self.wfile.write(json.dumps({"running": 0}).encode())
+        elif self.path in ("/start", "/stop", "/restart"):
+            self.end_headers()
+            run_init(self.path[1:])
+            self.wfile.write(b'<script>location.href="/"</script>')
+
+    def log_message(self, *_args):
         pass
 
-if __name__ == '__main__':
-    print('Server: http://192.168.1.1:8081')
-    HTTPServer(('0.0.0.0', 8081), H).serve_forever()
-	
+
+if __name__ == "__main__":
+    ip = get_lan_ip()
+    print(f"Server: http://{ip}:{LISTEN_PORT}", flush=True)
+    try:
+        ReuseHTTPServer((LISTEN_HOST, LISTEN_PORT), H).serve_forever()
+    except OSError as e:
+        print(f"Bind error on port {LISTEN_PORT}: {e}", file=sys.stderr)
+        sys.exit(1)
