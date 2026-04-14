@@ -39,7 +39,6 @@ def _pid_alive(pid):
 
 
 def find_proxy_pid():
-    """Status without pgrep (often missing on BusyBox routers)."""
     try:
         with open(PID_FILE, encoding="utf-8", errors="ignore") as f:
             pid = int(f.read().strip())
@@ -90,348 +89,282 @@ def _request_path(handler):
 HTML = """<!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#28a745">
-<title>TG WS Proxy</title>
-<style>
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    -webkit-tap-highlight-color: transparent;
-}
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#ff3b30">
+    <title>TG WS Proxy</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
 
-body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    min-height: 100vh;
-    padding: 16px;
-    margin: 0;
-}
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background-color: #050505;
+            color: #e0e0e0;
+            padding: 20px 16px 40px;
+            margin: 0;
+            min-height: 100vh;
+        }
 
-.container {
-    max-width: 500px;
-    margin: 0 auto;
-    background: white;
-    border-radius: 24px;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-    overflow: hidden;
-    animation: slideUp 0.4s ease-out;
-}
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
 
-@keyframes slideUp {
-    from {
-        opacity: 0;
-        transform: translateY(30px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
 
-.header {
-    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-    padding: 24px 20px;
-    text-align: center;
-}
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #ff3b30 0%, #ff6b6b 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            letter-spacing: -0.5px;
+        }
 
-.header h1 {
-    color: white;
-    font-size: 24px;
-    font-weight: 600;
-    margin-bottom: 8px;
-}
+        .header p {
+            font-size: 13px;
+            color: #6c6c6c;
+            margin-top: 6px;
+        }
 
-.header p {
-    color: rgba(255,255,255,0.9);
-    font-size: 14px;
-}
+        .status-card {
+            background: #0f0f0f;
+            border: 1px solid #2a2a2a;
+            border-radius: 20px;
+            padding: 24px 20px;
+            text-align: center;
+            margin-bottom: 24px;
+            transition: all 0.2s ease;
+        }
 
-.content {
-    padding: 24px 20px;
-}
+        .status-card.running {
+            border-color: #28a745;
+            box-shadow: 0 0 10px rgba(40, 167, 69, 0.2);
+        }
 
-.status-card {
-    background: #f8f9fa;
-    border-radius: 16px;
-    padding: 20px;
-    margin-bottom: 24px;
-    text-align: center;
-    transition: all 0.3s ease;
-}
+        .status-card.stopped {
+            border-color: #ff3b30;
+            box-shadow: 0 0 8px rgba(255, 59, 48, 0.15);
+        }
 
-.status-card.running {
-    background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-    border: 1px solid #28a745;
-}
+        .status-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
 
-.status-card.stopped {
-    background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
-    border: 1px solid #dc3545;
-}
+        .status-text {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
 
-.status-icon {
-    font-size: 48px;
-    margin-bottom: 8px;
-}
+        .status-card.running .status-text { color: #28a745; }
+        .status-card.stopped .status-text { color: #ff3b30; }
 
-.status-text {
-    font-size: 18px;
-    font-weight: 600;
-    margin-bottom: 4px;
-}
+        .status-pid {
+            font-size: 11px;
+            font-family: monospace;
+            color: #6c6c6c;
+        }
 
-.status-pid {
-    font-size: 12px;
-    opacity: 0.7;
-    font-family: monospace;
-}
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 32px;
+        }
 
-.button-group {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 24px;
-    flex-wrap: wrap;
-}
+        .btn {
+            flex: 1;
+            background: #0f0f0f;
+            border: 1px solid #2a2a2a;
+            color: #e0e0e0;
+            padding: 12px 16px;
+            font-size: 15px;
+            font-weight: 500;
+            border-radius: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: inherit;
+            text-align: center;
+        }
 
-.button-group button {
-    flex: 1;
-    min-width: 100px;
-    padding: 14px 20px;
-    font-size: 16px;
-    font-weight: 600;
-    border: none;
-    border-radius: 12px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    font-family: inherit;
-    color: white;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
+        .btn-start {
+            border-color: #28a745;
+            color: #28a745;
+        }
+        .btn-start:active { background: rgba(40, 167, 69, 0.1); transform: scale(0.97); }
 
-.button-group button:active {
-    transform: scale(0.97);
-}
+        .btn-stop {
+            border-color: #ff3b30;
+            color: #ff3b30;
+        }
+        .btn-stop:active { background: rgba(255, 59, 48, 0.1); transform: scale(0.97); }
 
-.btn-start {
-    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-}
+        .btn-restart {
+            border-color: #ffc107;
+            color: #ffc107;
+        }
+        .btn-restart:active { background: rgba(255, 193, 7, 0.1); transform: scale(0.97); }
 
-.btn-stop {
-    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
-}
+        .info-card {
+            background: #0f0f0f;
+            border: 1px solid #2a2a2a;
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
 
-.btn-restart {
-    background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);
-    color: #333;
-}
+        .info-card h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: #ff3b30;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            letter-spacing: -0.3px;
+        }
 
-.info-card {
-    background: #f8f9fa;
-    border-radius: 16px;
-    padding: 20px;
-    margin-bottom: 24px;
-}
+        .info-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 12px 0;
+            border-bottom: 1px solid #1f1f1f;
+        }
+        .info-row:last-child { border-bottom: none; }
 
-.info-card h3 {
-    font-size: 16px;
-    font-weight: 600;
-    margin-bottom: 16px;
-    color: #333;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
+        .info-label {
+            font-weight: 500;
+            min-width: 55px;
+            font-size: 13px;
+            color: #a0a0a0;
+        }
 
-.info-row {
-    display: flex;
-    flex-wrap: wrap;
-    padding: 12px 0;
-    border-bottom: 1px solid #e0e0e0;
-    align-items: center;
-    gap: 8px;
-}
+        .info-value {
+            flex: 1;
+            font-family: 'SF Mono', 'Courier New', monospace;
+            font-size: 12px;
+            background: #080808;
+            padding: 8px 12px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            word-break: break-all;
+            border: 1px solid #1f1f1f;
+        }
+        .info-value span { flex: 1; }
 
-.info-row:last-child {
-    border-bottom: none;
-}
+        .copy-icon {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 4px 8px;
+            border-radius: 8px;
+            transition: all 0.2s;
+            color: #a0a0a0;
+            flex-shrink: 0;
+        }
+        .copy-icon:active { transform: scale(0.9); color: #ff3b30; background: rgba(255, 59, 48, 0.1); }
 
-.info-label {
-    font-weight: 600;
-    min-width: 60px;
-    color: #666;
-    font-size: 14px;
-}
+        .info-link {
+            flex: 1;
+        }
+        .info-link a {
+            color: #28a745;
+            text-decoration: none;
+            font-size: 12px;
+            font-family: monospace;
+            background: #080808;
+            padding: 8px 12px;
+            border-radius: 12px;
+            display: block;
+            word-break: break-all;
+            border: 1px solid #1f1f1f;
+            transition: all 0.2s;
+        }
+        .info-link a:active { background: #1a1a1a; }
 
-.info-value {
-    flex: 1;
-    font-family: 'Courier New', monospace;
-    font-size: 13px;
-    word-break: break-all;
-    color: #333;
-    background: white;
-    padding: 8px 12px;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-}
+        .instruction {
+            background: #0f0f0f;
+            border: 1px solid #2a2a2a;
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+        .instruction h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #ff3b30;
+        }
+        .instruction ol {
+            padding-left: 20px;
+        }
+        .instruction li {
+            margin: 8px 0;
+            font-size: 13px;
+            color: #b0b0b0;
+            line-height: 1.5;
+        }
+        .instruction b {
+            color: #ff3b30;
+        }
 
-.info-value span {
-    word-break: break-all;
-    flex: 1;
-}
+        .footer {
+            text-align: center;
+            font-size: 10px;
+            color: #4a4a4a;
+            margin-top: 20px;
+            border-top: 1px solid #1a1a1a;
+            padding-top: 20px;
+        }
 
-.copy-icon {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 18px;
-    padding: 4px 8px;
-    border-radius: 6px;
-    transition: all 0.2s;
-    background: #e9ecef;
-    flex-shrink: 0;
-}
+        @media (max-width: 480px) {
+            body { padding: 16px 12px 32px; }
+            .button-group { gap: 8px; }
+            .btn { padding: 10px 12px; font-size: 14px; }
+            .info-value { font-size: 11px; padding: 6px 10px; }
+        }
 
-.copy-icon:active {
-    transform: scale(0.9);
-    background: #28a745;
-    color: white;
-}
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1f1f1f;
+            border: 1px solid #ff3b30;
+            color: #ff3b30;
+            padding: 8px 20px;
+            border-radius: 40px;
+            font-size: 13px;
+            font-weight: 500;
+            z-index: 1000;
+            animation: fadeOut 2s ease-out forwards;
+            white-space: nowrap;
+            backdrop-filter: blur(10px);
+        }
 
-.info-link {
-    flex: 1;
-}
-
-.info-link a {
-    color: #28a745;
-    text-decoration: none;
-    font-size: 13px;
-    background: white;
-    padding: 8px 12px;
-    border-radius: 8px;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    word-break: break-all;
-    width: 100%;
-}
-
-.instruction {
-    background: #e8f4f8;
-    border-radius: 16px;
-    padding: 20px;
-    border-left: 4px solid #28a745;
-}
-
-.instruction h3 {
-    font-size: 16px;
-    font-weight: 600;
-    margin-bottom: 12px;
-    color: #333;
-}
-
-.instruction ol {
-    padding-left: 20px;
-}
-
-.instruction li {
-    margin: 8px 0;
-    font-size: 13px;
-    color: #555;
-    line-height: 1.5;
-}
-
-.instruction b {
-    color: #28a745;
-}
-
-.footer {
-    text-align: center;
-    padding: 20px;
-    background: #f8f9fa;
-    font-size: 11px;
-    color: #999;
-    border-top: 1px solid #e0e0e0;
-}
-
-@media (max-width: 480px) {
-    body {
-        padding: 8px;
-    }
-    
-    .content {
-        padding: 16px;
-    }
-    
-    .button-group button {
-        padding: 12px 16px;
-        font-size: 14px;
-    }
-    
-    .info-label {
-        font-size: 12px;
-        min-width: 50px;
-    }
-    
-    .info-value {
-        font-size: 11px;
-        padding: 6px 10px;
-    }
-}
-
-@media (max-width: 380px) {
-    .button-group {
-        flex-direction: column;
-    }
-    
-    .button-group button {
-        width: 100%;
-    }
-}
-
-.loading {
-    display: inline-block;
-    width: 16px;
-    height: 16px;
-    border: 2px solid #f3f3f3;
-    border-top: 2px solid #28a745;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    margin-left: 8px;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-.toast {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(0,0,0,0.8);
-    color: white;
-    padding: 8px 16px;
-    border-radius: 20px;
-    font-size: 12px;
-    z-index: 1000;
-    animation: fadeOut 2s ease-out forwards;
-}
-
-@keyframes fadeOut {
-    0% { opacity: 1; }
-    70% { opacity: 1; }
-    100% { opacity: 0; visibility: hidden; }
-}
-</style>
+        @keyframes fadeOut {
+            0% { opacity: 1; transform: translateX(-50%) scale(1); }
+            70% { opacity: 1; transform: translateX(-50%) scale(1); }
+            100% { opacity: 0; transform: translateX(-50%) scale(0.95); visibility: hidden; }
+        }
+    </style>
 </head>
 <body>
 <div class="container">
@@ -439,143 +372,124 @@ body {
         <h1>TG WS Proxy</h1>
         <p>WebSocket MTProto Proxy</p>
     </div>
-    
-    <div class="content">
-        <div id="statusCard" class="status-card stopped">
-            <div class="status-icon">⏳</div>
-            <div class="status-text">Загрузка...</div>
-            <div class="status-pid"></div>
+
+    <div id="statusCard" class="status-card stopped">
+        <div class="status-icon">⟳</div>
+        <div class="status-text">Загрузка...</div>
+        <div class="status-pid"></div>
+    </div>
+
+    <div class="button-group">
+        <button class="btn btn-start" onclick="sendAction('start')">Запустить</button>
+        <button class="btn btn-stop" onclick="sendAction('stop')">Остановить</button>
+        <button class="btn btn-restart" onclick="sendAction('restart')">Перезапуск</button>
+    </div>
+
+    <div id="infoCard" class="info-card" style="display: none;">
+        <h3>📡 Данные для подключения</h3>
+        <div class="info-row">
+            <div class="info-label">🌐 Хост</div>
+            <div id="host" class="info-value"></div>
         </div>
-        
-        <div class="button-group">
-            <button class="btn-start" onclick="sendAction('start')">Запустить</button>
-            <button class="btn-stop" onclick="sendAction('stop')">Остановить</button>
-            <button class="btn-restart" onclick="sendAction('restart')">Перезапустить</button>
+        <div class="info-row">
+            <div class="info-label">🔌 Порт</div>
+            <div id="port" class="info-value"></div>
         </div>
-        
-        <div id="infoCard" class="info-card" style="display:none;">
-            <h3>📡 Данные для подключения</h3>
-            <div class="info-row">
-                <div class="info-label">🌐 Хост:</div>
-                <div id="host" class="info-value"></div>
-            </div>
-            <div class="info-row">
-                <div class="info-label">🔌 Порт:</div>
-                <div id="port" class="info-value"></div>
-            </div>
-            <div class="info-row">
-                <div class="info-label">🔑 Ключ:</div>
-                <div id="secret" class="info-value"></div>
-            </div>
-            <div class="info-row">
-                <div class="info-label">🔗 Ссылка:</div>
-                <div id="link" class="info-link"></div>
-            </div>
+        <div class="info-row">
+            <div class="info-label">🔑 Ключ</div>
+            <div id="secret" class="info-value"></div>
         </div>
-        
-        <div class="instruction">
-            <h3>📖 Инструкция для Telegram</h3>
-            <ol>
-                <li>Нажмите <b>Запустить</b></li>
-                <li>Настройки → Данные и память → Прокси</li>
-                <li>Добавить прокси → тип <b>MTProto</b></li>
-                <li>Введите хост, порт и ключ (с префиксом <b>dd</b>)</li>
-                <li>Или просто нажмите на ссылку выше</li>
-            </ol>
+        <div class="info-row">
+            <div class="info-label">🔗 Ссылка</div>
+            <div id="link" class="info-link"></div>
         </div>
     </div>
-    
+
+    <div class="instruction">
+        <h3>📖 Инструкция</h3>
+        <ol>
+            <li>Нажмите <b>Запустить</b></li>
+            <li>Telegram: Настройки → Данные и память → Прокси</li>
+            <li>Тип: <b>MTProto</b>, введите хост, порт и ключ (с <b>dd</b>)</li>
+            <li>Или просто нажмите на ссылку выше</li>
+        </ol>
+    </div>
+
     <div class="footer">
-        TG WS Proxy | WebSocket Proxy
+        TG WS Proxy | WebSocket
     </div>
 </div>
 
 <script>
-function showToast(message) {
-    let toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.textContent = message;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 2000);
-}
+    function showToast(message) {
+        let toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 2000);
+    }
 
-function copyToClipboard(text) {
-    navigator.clipboard.writeText(text).then(() => {
-        showToast('✅ Скопировано!');
-    });
-}
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            showToast('✓ Скопировано');
+        }).catch(() => showToast('✗ Ошибка'));
+    }
 
-function sendAction(action) {
-    fetch('/' + action)
-        .then(() => {
-            showToast('🔄 Выполняется ' + action + '...');
-            setTimeout(update, 500);
-        })
-        .catch(() => {
-            showToast('❌ Ошибка при выполнении');
-        });
-}
+    function sendAction(action) {
+        fetch('/' + action)
+            .then(() => {
+                showToast('⟳ ' + action + '...');
+                setTimeout(update, 600);
+            })
+            .catch(() => showToast('✗ Ошибка связи'));
+    }
 
-function update() {
-    fetch('/status')
-        .then(r => r.json())
-        .then(d => {
-            let statusCard = document.getElementById('statusCard');
-            let infoCard = document.getElementById('infoCard');
-            
-            if (d.running) {
-                statusCard.className = 'status-card running';
-                statusCard.innerHTML = `
-                    <div class="status-icon">✅</div>
-                    <div class="status-text">РАБОТАЕТ</div>
-                    <div class="status-pid">PID: ${d.pid}</div>
-                `;
-                
-                infoCard.style.display = 'block';
-                let fullSecret = 'dd' + d.secret;
-                let link = 'tg://proxy?server=' + d.host + '&port=' + d.port + '&secret=' + fullSecret;
-                
-                document.getElementById('host').innerHTML = `
-                    <span>${d.host}</span>
-                    <button class="copy-icon" onclick="copyToClipboard('${d.host}')">📋</button>
-                `;
-                
-                document.getElementById('port').innerHTML = `
-                    <span>${d.port}</span>
-                    <button class="copy-icon" onclick="copyToClipboard('${d.port}')">📋</button>
-                `;
-                
-                document.getElementById('secret').innerHTML = `
-                    <span>${fullSecret}</span>
-                    <button class="copy-icon" onclick="copyToClipboard('${fullSecret}')">📋</button>
-                `;
-                
-                document.getElementById('link').innerHTML = `
-                    <a href="${link}" target="_blank">${link}</a>
-                `;
-            } else {
+    function update() {
+        fetch('/status?t=' + Date.now())
+            .then(r => r.json())
+            .then(d => {
+                const statusCard = document.getElementById('statusCard');
+                const infoCard = document.getElementById('infoCard');
+
+                if (d.running) {
+                    statusCard.className = 'status-card running';
+                    statusCard.innerHTML = `
+                        <div class="status-icon">●</div>
+                        <div class="status-text">РАБОТАЕТ</div>
+                        <div class="status-pid">PID: ${d.pid}</div>
+                    `;
+                    infoCard.style.display = 'block';
+
+                    const fullSecret = 'dd' + d.secret;
+                    const link = `tg://proxy?server=${d.host}&port=${d.port}&secret=${fullSecret}`;
+
+                    document.getElementById('host').innerHTML = `<span>${d.host}</span><button class="copy-icon" onclick="copyToClipboard('${d.host}')">📋</button>`;
+                    document.getElementById('port').innerHTML = `<span>${d.port}</span><button class="copy-icon" onclick="copyToClipboard('${d.port}')">📋</button>`;
+                    document.getElementById('secret').innerHTML = `<span>${fullSecret}</span><button class="copy-icon" onclick="copyToClipboard('${fullSecret}')">📋</button>`;
+                    document.getElementById('link').innerHTML = `<a href="${link}" target="_blank">${link}</a>`;
+                } else {
+                    statusCard.className = 'status-card stopped';
+                    statusCard.innerHTML = `
+                        <div class="status-icon">○</div>
+                        <div class="status-text">НЕ РАБОТАЕТ</div>
+                        <div class="status-pid"></div>
+                    `;
+                    infoCard.style.display = 'none';
+                }
+            })
+            .catch(() => {
+                const statusCard = document.getElementById('statusCard');
                 statusCard.className = 'status-card stopped';
                 statusCard.innerHTML = `
-                    <div class="status-icon">❌</div>
-                    <div class="status-text">НЕ РАБОТАЕТ</div>
+                    <div class="status-icon">⚠</div>
+                    <div class="status-text">Ошибка</div>
                     <div class="status-pid"></div>
                 `;
-                infoCard.style.display = 'none';
-            }
-        })
-        .catch(() => {
-            let statusCard = document.getElementById('statusCard');
-            statusCard.className = 'status-card stopped';
-            statusCard.innerHTML = `
-                <div class="status-icon">⚠️</div>
-                <div class="status-text">Ошибка связи</div>
-                <div class="status-pid"></div>
-            `;
-        });
-}
+            });
+    }
 
-setInterval(update, 3000);
-update();
+    setInterval(update, 3000);
+    update();
 </script>
 </body>
 </html>"""
