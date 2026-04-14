@@ -542,9 +542,7 @@ EOF
 }
 
 delete_proxy() {
-    echo -e "\n${MAGENTA}════════════════════════════════════════${NC}"
     echo -e "${MAGENTA}     УДАЛЕНИЕ TG WS PROXY${NC}"
-    echo -e "${MAGENTA}════════════════════════════════════════${NC}"
     echo -e "${CYAN}Останавливаем сервисы...${NC}"
     stop_web_server_process
     [ -f "$INIT_PATH" ] && run_init stop 2>/dev/null
