@@ -252,7 +252,8 @@ body {
     flex-wrap: wrap;
     padding: 12px 0;
     border-bottom: 1px solid #e0e0e0;
-    align-items: flex-start;
+    align-items: center;
+    gap: 8px;
 }
 
 .info-row:last-child {
@@ -261,8 +262,7 @@ body {
 
 .info-label {
     font-weight: 600;
-    width: 70px;
-    flex-shrink: 0;
+    min-width: 60px;
     color: #666;
     font-size: 14px;
 }
@@ -274,23 +274,53 @@ body {
     word-break: break-all;
     color: #333;
     background: white;
+    padding: 8px 12px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.info-value span {
+    word-break: break-all;
+    flex: 1;
+}
+
+.copy-icon {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
     padding: 4px 8px;
     border-radius: 6px;
+    transition: all 0.2s;
+    background: #e9ecef;
+    flex-shrink: 0;
+}
+
+.copy-icon:active {
+    transform: scale(0.9);
+    background: #28a745;
+    color: white;
 }
 
 .info-link {
     flex: 1;
-    word-break: break-all;
 }
 
 .info-link a {
     color: #28a745;
     text-decoration: none;
-    font-size: 12px;
+    font-size: 13px;
     background: white;
-    padding: 4px 8px;
-    border-radius: 6px;
-    display: inline-block;
+    padding: 8px 12px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    word-break: break-all;
+    width: 100%;
 }
 
 .instruction {
@@ -346,12 +376,13 @@ body {
     }
     
     .info-label {
-        width: 60px;
         font-size: 12px;
+        min-width: 50px;
     }
     
     .info-value {
         font-size: 11px;
+        padding: 6px 10px;
     }
 }
 
@@ -381,17 +412,6 @@ body {
     100% { transform: rotate(360deg); }
 }
 
-.copy-btn {
-    background: #28a745;
-    color: white;
-    border: none;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    cursor: pointer;
-    margin-left: 8px;
-}
-
 .toast {
     position: fixed;
     bottom: 20px;
@@ -416,7 +436,7 @@ body {
 <body>
 <div class="container">
     <div class="header">
-        <h1>🚀 TG WS Proxy</h1>
+        <h1>TG WS Proxy</h1>
         <p>WebSocket MTProto Proxy</p>
     </div>
     
@@ -428,35 +448,35 @@ body {
         </div>
         
         <div class="button-group">
-            <button class="btn-start" onclick="sendAction('start')">▶ Запустить</button>
-            <button class="btn-stop" onclick="sendAction('stop')">⏹ Остановить</button>
-            <button class="btn-restart" onclick="sendAction('restart')">🔄 Перезапустить</button>
+            <button class="btn-start" onclick="sendAction('start')">Запустить</button>
+            <button class="btn-stop" onclick="sendAction('stop')">Остановить</button>
+            <button class="btn-restart" onclick="sendAction('restart')">Перезапустить</button>
         </div>
         
         <div id="infoCard" class="info-card" style="display:none;">
             <h3>📡 Данные для подключения</h3>
             <div class="info-row">
                 <div class="info-label">🌐 Хост:</div>
-                <div id="host" class="info-value">-</div>
+                <div id="host" class="info-value"></div>
             </div>
             <div class="info-row">
                 <div class="info-label">🔌 Порт:</div>
-                <div id="port" class="info-value">-</div>
+                <div id="port" class="info-value"></div>
             </div>
             <div class="info-row">
                 <div class="info-label">🔑 Ключ:</div>
-                <div id="secret" class="info-value">-</div>
+                <div id="secret" class="info-value"></div>
             </div>
             <div class="info-row">
                 <div class="info-label">🔗 Ссылка:</div>
-                <div id="link" class="info-link">-</div>
+                <div id="link" class="info-link"></div>
             </div>
         </div>
         
         <div class="instruction">
             <h3>📖 Инструкция для Telegram</h3>
             <ol>
-                <li>Нажмите <b>▶ Запустить</b></li>
+                <li>Нажмите <b>Запустить</b></li>
                 <li>Настройки → Данные и память → Прокси</li>
                 <li>Добавить прокси → тип <b>MTProto</b></li>
                 <li>Введите хост, порт и ключ (с префиксом <b>dd</b>)</li>
@@ -513,13 +533,26 @@ function update() {
                 
                 infoCard.style.display = 'block';
                 let fullSecret = 'dd' + d.secret;
-                
-                document.getElementById('host').innerHTML = d.host + `<button class="copy-btn" onclick="copyToClipboard('${d.host}')">Копировать</button>`;
-                document.getElementById('port').innerHTML = d.port + `<button class="copy-btn" onclick="copyToClipboard('${d.port}')">Копировать</button>`;
-                document.getElementById('secret').innerHTML = fullSecret + `<button class="copy-btn" onclick="copyToClipboard('${fullSecret}')">Копировать</button>`;
-                
                 let link = 'tg://proxy?server=' + d.host + '&port=' + d.port + '&secret=' + fullSecret;
-                document.getElementById('link').innerHTML = `<a href="${link}" target="_blank">📱 Нажмите для подключения</a><button class="copy-btn" onclick="copyToClipboard('${link}')">Копировать ссылку</button>`;
+                
+                document.getElementById('host').innerHTML = `
+                    <span>${d.host}</span>
+                    <button class="copy-icon" onclick="copyToClipboard('${d.host}')">📋</button>
+                `;
+                
+                document.getElementById('port').innerHTML = `
+                    <span>${d.port}</span>
+                    <button class="copy-icon" onclick="copyToClipboard('${d.port}')">📋</button>
+                `;
+                
+                document.getElementById('secret').innerHTML = `
+                    <span>${fullSecret}</span>
+                    <button class="copy-icon" onclick="copyToClipboard('${fullSecret}')">📋</button>
+                `;
+                
+                document.getElementById('link').innerHTML = `
+                    <a href="${link}" target="_blank">${link}</a>
+                `;
             } else {
                 statusCard.className = 'status-card stopped';
                 statusCard.innerHTML = `
