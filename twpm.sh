@@ -239,24 +239,6 @@ check_required_tools() {
 }
 
 check_optional_tools() {
-    WARNED=0
-    if ! have_tool pgrep || ! have_tool pkill; then
-        echo -e "${YELLOW}Предупреждение: pgrep/pkill не найдены, будет использован fallback через ps/awk.${NC}"
-        WARNED=1
-    fi
-    if ! have_tool curl; then
-        echo -e "${YELLOW}Предупреждение: curl не найден, резервная загрузка недоступна.${NC}"
-        WARNED=1
-    fi
-    if ! have_tool hexdump; then
-        echo -e "${YELLOW}Предупреждение: hexdump не найден, генерация секрета перейдет на fallback.${NC}"
-        WARNED=1
-    fi
-    if ! have_tool md5sum && ! have_tool sha256sum; then
-        echo -e "${YELLOW}Предупреждение: md5sum/sha256sum не найдены, будет использован минимальный fallback секрета.${NC}"
-        WARNED=1
-    fi
-    [ "$WARNED" -eq 1 ] && echo
     return 0
 }
 
@@ -390,7 +372,6 @@ stop_all_proxy() {
 }
 
 download_web_interface() {
-    echo -e "${CYAN}Скачиваем веб-интерфейс управления...${NC}"
     if ! wget -q -O "$WEB_SERVER" "$REPO_URL/src/web.py"; then
         rm -f "$WEB_SERVER"
         echo -e "${RED}Ошибка: не удалось скачать веб-интерфейс${NC}"
@@ -403,11 +384,10 @@ download_web_interface() {
     fi
     strip_cr_file "$WEB_SERVER"
     chmod +x "$WEB_SERVER"
-    echo -e "${GREEN}Веб-интерфейс загружен${NC}"
+    return 0
 }
 
 download_init_script() {
-    echo -e "${CYAN}Скачиваем init-скрипт...${NC}"
     mkdir -p "$(dirname "$INIT_PATH")" || true
     if ! wget -q -O "$INIT_PATH" "$REPO_URL/init/S99tgwsproxy"; then
         rm -f "$INIT_PATH"
@@ -422,7 +402,7 @@ download_init_script() {
     strip_cr_file "$INIT_PATH"
     patch_init_if_no_pkill
     chmod +x "$INIT_PATH"
-    echo -e "${GREEN}Init-скрипт загружен${NC}"
+    return 0
 }
 
 install_proxy() {
