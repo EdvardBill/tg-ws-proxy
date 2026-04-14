@@ -426,7 +426,7 @@ download_init_script() {
 }
 
 install_proxy() {
-    echo -e "${MAGENTA}     УСТАНОВКА TG WS PROXY${NC}"
+    echo -e "${MAGENTA}УСТАНОВКА TG WS PROXY${NC}"
     check_entware || return 1
     refresh_path
     check_required_tools || return 1
@@ -529,7 +529,7 @@ EOF
     fi
     sleep 3
     if proxy_process_running; then
-        echo -e "${GREEN}        УСТАНОВКА УСПЕШНО ЗАВЕРШЕНА!${NC}"
+        echo -e "${GREEN}УСТАНОВКА УСПЕШНО ЗАВЕРШЕНА!${NC}"
         echo -e "\n${CYAN}Веб-интерфейс:${NC} http://$(get_router_ip):8081"
         echo -e "${CYAN}Порт прокси:${NC} 1443"
         echo -e "${CYAN}Ключ:${NC} dd$SECRET"
@@ -542,7 +542,7 @@ EOF
 }
 
 delete_proxy() {
-    echo -e "${MAGENTA}     УДАЛЕНИЕ TG WS PROXY${NC}"
+    echo -e "${MAGENTA}УДАЛЕНИЕ TG WS PROXY${NC}"
     echo -e "${CYAN}Останавливаем сервисы...${NC}"
     stop_web_server_process
     [ -f "$INIT_PATH" ] && run_init stop 2>/dev/null
@@ -573,7 +573,7 @@ delete_proxy() {
     /sbin/mtd_storage.sh save > /dev/null 2>&1
     echo -e "${CYAN}Удаляем скрипт...${NC}"
     rm -f "$0"
-    echo -e "${GREEN}        УДАЛЕНИЕ ЗАВЕРШЕНО!${NC}"
+    echo -e "${GREEN}УДАЛЕНИЕ ЗАВЕРШЕНО!${NC}"
     echo -e "${YELLOW}Скрипт удален. Нажмите Enter для выхода...${NC}"
     read dummy
     exit 0
@@ -623,7 +623,7 @@ menu() {
     read choice
     case "$choice" in
         1) install_proxy || PAUSE ;;
-        2) delete_proxy ;;
+        2) delete_proxy || PAUSE ;;
         3) restart_proxy ;;
         0)
             clear
