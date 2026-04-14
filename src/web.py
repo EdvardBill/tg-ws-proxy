@@ -93,7 +93,7 @@ HTML = """<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#ff3b30">
-    <title>TG WS Proxy</title>
+    <title>TG WS Proxy для Padavan</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * {
@@ -167,10 +167,32 @@ HTML = """<!DOCTYPE html>
             font-size: 20px;
             font-weight: 600;
             margin-bottom: 6px;
+            display: inline-block;
         }
 
-        .status-card.running .status-text { color: #28a745; }
-        .status-card.stopped .status-text { color: #ff3b30; }
+        .status-card.running .status-text {
+            color: #28a745;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        .status-card.stopped .status-text {
+            color: #ff3b30;
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+                text-shadow: 0 0 0 rgba(40, 167, 69, 0);
+            }
+            50% {
+                opacity: 0.7;
+                text-shadow: 0 0 8px rgba(40, 167, 69, 0.8);
+            }
+            100% {
+                opacity: 1;
+                text-shadow: 0 0 0 rgba(40, 167, 69, 0);
+            }
+        }
 
         .status-pid {
             font-size: 11px;
@@ -358,6 +380,11 @@ HTML = """<!DOCTYPE html>
             padding-top: 20px;
         }
 
+        .footer .version {
+            color: #ff3b30;
+            font-weight: 500;
+        }
+
         @media (max-width: 480px) {
             body { padding: 16px 12px 32px; }
             .button-group { gap: 8px; }
@@ -394,7 +421,7 @@ HTML = """<!DOCTYPE html>
 <div class="container">
     <div class="header">
         <h1>TG WS Proxy</h1>
-        <p>WebSocket MTProto Proxy</p>
+        <p>WebSocket MTProto Proxy для Padavan</p>
     </div>
 
     <div id="statusCard" class="status-card stopped">
@@ -440,7 +467,8 @@ HTML = """<!DOCTYPE html>
     </div>
 
     <div class="footer">
-        TG WS Proxy | WebSocket
+        TG WS Proxy для Padavan | WebSocket MTProto Proxy<br>
+        <span class="version">by save55</span>
     </div>
 </div>
 
@@ -574,6 +602,7 @@ class H(BaseHTTPRequestHandler):
 
     def log_message(self, *_args):
         pass
+
 
 if __name__ == "__main__":
     ip = get_lan_ip()
