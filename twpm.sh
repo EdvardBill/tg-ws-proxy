@@ -1,4 +1,5 @@
 #!/bin/sh
+
 GREEN="\033[1;32m"
 YELLOW="\033[1;33m"
 MAGENTA="\033[1;35m"
@@ -6,9 +7,11 @@ CYAN="\033[1;36m"
 RED="\033[1;31m"
 BLUE="\033[0;34m"
 NC="\033[0m"
+
 REPO_URL="https://raw.githubusercontent.com/EdvardBill/tg-ws-proxy/main"
 PROXY_REPO_URL="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/main.zip"
 PROXY_REPO_URL_ALT="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip"
+
 BIN_PATH="/opt/bin/tg-ws-proxy"
 INIT_PATH="/opt/etc/init.d/S99tgwsproxy"
 SECRET_FILE="/opt/home/admin/proxy_secret.txt"
@@ -16,10 +19,12 @@ INFO_FILE="/opt/home/admin/proxy_info.txt"
 LOG_FILE="/var/log/tg-ws-proxy.log"
 WEB_SERVER="/tmp/web.py"
 WEB_LOG="/tmp/tg-ws-web.log"
+
 run_init() {
     [ -f "$INIT_PATH" ] || return 1
     sh "$INIT_PATH" "$@"
 }
+
 strip_cr_file() {
     f="$1"
     [ -f "$f" ] || return 1
@@ -30,6 +35,7 @@ strip_cr_file() {
     fi
     mv "$tmp" "$f"
 }
+
 patch_init_if_no_pkill() {
     [ -f "$INIT_PATH" ] || return 0
     if have_cmd pkill; then
@@ -37,6 +43,7 @@ patch_init_if_no_pkill() {
     fi
     sed -i '/pkill.*proxy\.tg_ws_proxy/d' "$INIT_PATH" 2>/dev/null || true
 }
+
 proxy_process_running() {
     if have_cmd pgrep; then
         pgrep -f "proxy.tg_ws_proxy" > /dev/null 2>&1
@@ -45,6 +52,7 @@ proxy_process_running() {
     ps | grep "proxy.tg_ws_proxy" | grep -v grep > /dev/null 2>&1
     return $?
 }
+
 proxy_process_pid() {
     if have_cmd pgrep; then
         pgrep -f "proxy.tg_ws_proxy" | head -1
@@ -52,6 +60,7 @@ proxy_process_pid() {
     fi
     ps | grep "proxy.tg_ws_proxy" | grep -v grep | awk '{print $1}' | head -1
 }
+
 if [ -d "/opt/home/admin" ]; then
     HOME_DIR="/opt/home/admin"
 elif [ -d "/root" ]; then
@@ -61,10 +70,12 @@ else
 fi
 PROXY_DIR="$HOME_DIR/tg-ws-proxy"
 export PATH="/opt/bin:/opt/sbin:/opt/usr/bin:/usr/bin:/bin:/sbin:$PATH"
+
 PAUSE() {
     echo -ne "\n${YELLOW}Нажмите Enter...${NC}"
     read dummy
 }
+
 check_entware() {
     if [ ! -d "/opt/bin" ] || [ ! -f "/opt/etc/opkg.conf" ]; then
         echo -e "${RED}Ошибка: Entware не найден. Установите Entware сначала.${NC}"
@@ -73,6 +84,7 @@ check_entware() {
     fi
     return 0
 }
+
 refresh_path() {
     export PATH="/opt/bin:/opt/sbin:/opt/usr/bin:/usr/bin:/bin:/sbin:$PATH"
     hash -r 2>/dev/null
@@ -86,6 +98,7 @@ resolve_python_cmd() {
         echo ""
     fi
 }
+
 have_cmd() {
     if command -v "$1" >/dev/null 2>&1; then
         return 0
@@ -97,6 +110,7 @@ have_cmd() {
     done
     return 1
 }
+
 busybox_path() {
     for bb in busybox /bin/busybox /usr/bin/busybox /sbin/busybox; do
         if [ -x "$bb" ]; then
@@ -137,6 +151,7 @@ busybox_path() {
     done
     return 1
 }
+
 essential_tool_ok() {
     case "$1" in
         sed)
@@ -174,6 +189,7 @@ essential_tool_ok() {
     esac
     return 1
 }
+
 have_tool() {
     case "$1" in
         sed|awk|grep|xargs)
@@ -192,6 +208,7 @@ have_tool() {
         *)     "$BB" "$1" --help >/dev/null 2>&1 ;;
     esac
 }
+
 check_required_tools() {
     MISSING=""
     for cmd in sed awk grep xargs; do
@@ -219,6 +236,7 @@ check_required_tools() {
     fi
     return 0
 }
+
 check_optional_tools() {
     WARNED=0
     if ! have_tool pgrep || ! have_tool pkill; then
@@ -240,6 +258,7 @@ check_optional_tools() {
     [ "$WARNED" -eq 1 ] && echo
     return 0
 }
+
 install_python() {
     echo -e "${MAGENTA}Проверяем наличие Python...${NC}"
     PYTHON_CMD=$(resolve_python_cmd)
@@ -263,6 +282,7 @@ install_python() {
     opkg install python3-cryptography > /dev/null 2>&1
     return 0
 }
+
 install_unzip() {
     if have_tool unzip; then
         echo -e "${GREEN}UnZip уже установлен .... [OK]${NC}"
@@ -271,6 +291,7 @@ install_unzip() {
     fi
     return 0
 }
+
 install_wget() {
     if have_tool wget; then
         echo -e "${GREEN}Wget уже установлен .... [OK]${NC}"
@@ -279,6 +300,7 @@ install_wget() {
     fi
     return 0
 }
+
 generate_secret() {
     SECRET=""
     if have_tool hexdump; then
@@ -297,11 +319,13 @@ generate_secret() {
     fi
     echo "$SECRET"
 }
+
 get_router_ip() {
     IP=$(nvram get lan_ipaddr 2>/dev/null)
     [ -z "$IP" ] && IP="192.168.1.1"
     echo "$IP"
 }
+
 stop_proxy_processes() {
     if have_cmd pgrep && have_cmd pkill; then
         if pgrep -f "proxy.tg_ws_proxy" > /dev/null 2>&1; then
@@ -323,6 +347,7 @@ stop_proxy_processes() {
         echo "$PIDS" | xargs kill -9 2>/dev/null
     fi
 }
+
 stop_web_server_process() {
     n=0
     while [ "$n" -lt 4 ]; do
@@ -352,6 +377,7 @@ stop_web_server_process() {
         fuser -k 8081/tcp 2>/dev/null
     fi
 }
+
 stop_all_proxy() {
     echo -e "${CYAN}Останавливаем старые процессы...${NC}"
     if [ -f "$INIT_PATH" ]; then
@@ -361,6 +387,7 @@ stop_all_proxy() {
     stop_proxy_processes
     sleep 2
 }
+
 download_web_interface() {
     echo -e "${CYAN}Скачиваем веб-интерфейс управления...${NC}"
     if ! wget -q -O "$WEB_SERVER" "$REPO_URL/src/web.py"; then
@@ -377,6 +404,7 @@ download_web_interface() {
     chmod +x "$WEB_SERVER"
     echo -e "${GREEN}Веб-интерфейс загружен${NC}"
 }
+
 download_init_script() {
     echo -e "${CYAN}Скачиваем init-скрипт...${NC}"
     mkdir -p "$(dirname "$INIT_PATH")" || true
@@ -395,6 +423,7 @@ download_init_script() {
     chmod +x "$INIT_PATH"
     echo -e "${GREEN}Init-скрипт загружен${NC}"
 }
+
 install_proxy() {
     echo -e "${MAGENTA}     УСТАНОВКА TG WS PROXY${NC}"
     check_entware || return 1
@@ -510,6 +539,7 @@ EOF
     fi
     PAUSE
 }
+
 delete_proxy() {
     echo -e "\n${MAGENTA}════════════════════════════════════════${NC}"
     echo -e "${MAGENTA}     УДАЛЕНИЕ TG WS PROXY${NC}"
@@ -549,6 +579,7 @@ delete_proxy() {
     read dummy
     exit 0
 }
+
 restart_proxy() {
     if [ -f "$INIT_PATH" ]; then
         echo -e "\n${MAGENTA}Перезапускаем сервис...${NC}"
@@ -564,11 +595,14 @@ restart_proxy() {
     fi
     PAUSE
 }
+
 menu() {
     refresh_path
     clear
-    echo -e "${BLUE} 𝕋𝔾 𝕎𝕊 ℙ𝕣𝕠𝕩𝕪 𝕕𝕝𝕪 ℙ𝕒𝕕𝕒𝕧𝕒𝕟${NC}"
-    echo -e "${BLUE}                 by save55${NC}"
+    echo -e "${BLUE}╔════════════════════════════════════════╗${NC}"
+    echo -e "${BLUE}║         TG WS Proxy для Padavan        ║${NC}"
+    echo -e "${BLUE}║                       by save55        ║${NC}"
+    echo -e "${BLUE}╚════════════════════════════════════════╝${NC}"
     if proxy_process_running; then
         PID=$(proxy_process_pid)
         LOCAL_IP=$(get_router_ip)
@@ -603,6 +637,7 @@ menu() {
             ;;
     esac
 }
+
 while true; do
     menu
 done
