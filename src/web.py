@@ -161,18 +161,21 @@ HTML = """<!DOCTYPE html>
         .status-icon {
             font-size: 48px;
             margin-bottom: 12px;
+            display: inline-block;
+        }
+
+        .status-card.running .status-icon {
+            animation: pulse 1.5s ease-in-out infinite;
         }
 
         .status-text {
             font-size: 20px;
             font-weight: 600;
             margin-bottom: 6px;
-            display: inline-block;
         }
 
         .status-card.running .status-text {
             color: #28a745;
-            animation: pulse 1.5s ease-in-out infinite;
         }
 
         .status-card.stopped .status-text {
@@ -181,16 +184,16 @@ HTML = """<!DOCTYPE html>
 
         @keyframes pulse {
             0% {
+                transform: scale(1);
                 opacity: 1;
-                text-shadow: 0 0 0 rgba(40, 167, 69, 0);
             }
             50% {
-                opacity: 0.7;
-                text-shadow: 0 0 8px rgba(40, 167, 69, 0.8);
+                transform: scale(1.15);
+                opacity: 0.8;
             }
             100% {
+                transform: scale(1);
                 opacity: 1;
-                text-shadow: 0 0 0 rgba(40, 167, 69, 0);
             }
         }
 
