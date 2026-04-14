@@ -13,7 +13,6 @@ LISTEN_HOST = "0.0.0.0"
 LISTEN_PORT = 8081
 PROXY_CMD_MARK = "proxy.tg_ws_proxy"
 
-
 def get_lan_ip():
     try:
         r = subprocess.run(
@@ -29,15 +28,13 @@ def get_lan_ip():
         pass
     return "192.168.1.1"
 
-
 def _pid_alive(pid):
     try:
         os.kill(pid, 0)
         return True
     except OSError:
         return False
-
-
+        
 def find_proxy_pid():
     try:
         with open(PID_FILE, encoding="utf-8", errors="ignore") as f:
@@ -73,18 +70,15 @@ def find_proxy_pid():
 
     return None
 
-
 def run_init(action):
     subprocess.run(["sh", INIT_SCRIPT, action], check=False)
-
-
+    
 def _request_path(handler):
     raw = handler.path.split("?", 1)[0].split("#", 1)[0]
     raw = raw.strip() or "/"
     if raw != "/" and raw.endswith("/"):
         raw = raw.rstrip("/")
     return raw
-
 
 HTML = """<!DOCTYPE html>
 <html lang="ru">
@@ -102,7 +96,6 @@ HTML = """<!DOCTYPE html>
             box-sizing: border-box;
             -webkit-tap-highlight-color: transparent;
         }
-
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
             background-color: #050505;
@@ -111,17 +104,14 @@ HTML = """<!DOCTYPE html>
             margin: 0;
             min-height: 100vh;
         }
-
         .container {
             max-width: 600px;
             margin: 0 auto;
         }
-
         .header {
             text-align: center;
             margin-bottom: 32px;
         }
-
         .header h1 {
             font-size: 28px;
             font-weight: 700;
@@ -131,13 +121,11 @@ HTML = """<!DOCTYPE html>
             color: transparent;
             letter-spacing: -0.5px;
         }
-
         .header p {
             font-size: 13px;
             color: #6c6c6c;
             margin-top: 6px;
         }
-
         .status-card {
             background: #0f0f0f;
             border: 1px solid #2a2a2a;
@@ -147,68 +135,39 @@ HTML = """<!DOCTYPE html>
             margin-bottom: 24px;
             transition: all 0.2s ease;
         }
-
         .status-card.running {
             border-color: #28a745;
             box-shadow: 0 0 10px rgba(40, 167, 69, 0.2);
         }
-
         .status-card.stopped {
             border-color: #ff3b30;
             box-shadow: 0 0 8px rgba(255, 59, 48, 0.15);
         }
-
         .status-icon {
             font-size: 48px;
             margin-bottom: 12px;
-            display: inline-block;
         }
-
-        .status-card.running .status-icon {
-            animation: pulse 1.5s ease-in-out infinite;
-        }
-
         .status-text {
             font-size: 20px;
             font-weight: 600;
             margin-bottom: 6px;
         }
-
         .status-card.running .status-text {
             color: #28a745;
         }
-
         .status-card.stopped .status-text {
             color: #ff3b30;
         }
-
-        @keyframes pulse {
-            0% {
-                transform: scale(1);
-                opacity: 1;
-            }
-            50% {
-                transform: scale(1.15);
-                opacity: 0.8;
-            }
-            100% {
-                transform: scale(1);
-                opacity: 1;
-            }
-        }
-
         .status-pid {
             font-size: 11px;
             font-family: monospace;
             color: #6c6c6c;
         }
-
         .button-group {
             display: flex;
             gap: 12px;
             margin-bottom: 32px;
         }
-
         .btn {
             flex: 1;
             background: #0f0f0f;
@@ -227,11 +186,9 @@ HTML = """<!DOCTYPE html>
             justify-content: center;
             gap: 8px;
         }
-
         .btn i {
             font-size: 14px;
         }
-
         .btn-start {
             border-color: #28a745;
             color: #28a745;
@@ -257,7 +214,6 @@ HTML = """<!DOCTYPE html>
             padding: 20px;
             margin-bottom: 24px;
         }
-
         .info-card h3 {
             font-size: 16px;
             font-weight: 600;
@@ -268,11 +224,9 @@ HTML = """<!DOCTYPE html>
             gap: 8px;
             letter-spacing: -0.3px;
         }
-
         .info-card h3 i {
             font-size: 18px;
         }
-
         .info-row {
             display: flex;
             flex-wrap: wrap;
@@ -282,7 +236,6 @@ HTML = """<!DOCTYPE html>
             border-bottom: 1px solid #1f1f1f;
         }
         .info-row:last-child { border-bottom: none; }
-
         .info-label {
             font-weight: 500;
             min-width: 55px;
@@ -292,12 +245,10 @@ HTML = """<!DOCTYPE html>
             align-items: center;
             gap: 6px;
         }
-
         .info-label i {
             font-size: 12px;
             width: 16px;
         }
-
         .info-value {
             flex: 1;
             font-family: 'SF Mono', 'Courier New', monospace;
@@ -313,7 +264,6 @@ HTML = """<!DOCTYPE html>
             border: 1px solid #1f1f1f;
         }
         .info-value span { flex: 1; }
-
         .copy-icon {
             background: none;
             border: none;
@@ -326,7 +276,6 @@ HTML = """<!DOCTYPE html>
             flex-shrink: 0;
         }
         .copy-icon:active { transform: scale(0.9); color: #ff3b30; background: rgba(255, 59, 48, 0.1); }
-
         .info-link {
             flex: 1;
         }
@@ -344,7 +293,6 @@ HTML = """<!DOCTYPE html>
             transition: all 0.2s;
         }
         .info-link a:active { background: #1a1a1a; }
-
         .instruction {
             background: #0f0f0f;
             border: 1px solid #2a2a2a;
@@ -373,7 +321,6 @@ HTML = """<!DOCTYPE html>
         .instruction b {
             color: #ff3b30;
         }
-
         .footer {
             text-align: center;
             font-size: 10px;
@@ -382,19 +329,16 @@ HTML = """<!DOCTYPE html>
             border-top: 1px solid #1a1a1a;
             padding-top: 20px;
         }
-
         .footer .version {
             color: #ff3b30;
             font-weight: 500;
         }
-
         @media (max-width: 480px) {
             body { padding: 16px 12px 32px; }
             .button-group { gap: 8px; }
             .btn { padding: 10px 12px; font-size: 14px; }
             .info-value { font-size: 11px; padding: 6px 10px; }
         }
-
         .toast {
             position: fixed;
             bottom: 20px;
@@ -412,7 +356,6 @@ HTML = """<!DOCTYPE html>
             white-space: nowrap;
             backdrop-filter: blur(10px);
         }
-
         @keyframes fadeOut {
             0% { opacity: 1; transform: translateX(-50%) scale(1); }
             70% { opacity: 1; transform: translateX(-50%) scale(1); }
@@ -426,19 +369,16 @@ HTML = """<!DOCTYPE html>
         <h1>TG WS Proxy</h1>
         <p>WebSocket MTProto Proxy для Padavan</p>
     </div>
-
     <div id="statusCard" class="status-card stopped">
         <div class="status-icon"><i class="fas fa-circle-notch fa-spin"></i></div>
         <div class="status-text">Загрузка...</div>
         <div class="status-pid"></div>
     </div>
-
     <div class="button-group">
         <button class="btn btn-start" onclick="sendAction('start')"><i class="fas fa-play"></i> Запустить</button>
         <button class="btn btn-stop" onclick="sendAction('stop')"><i class="fas fa-stop"></i> Остановить</button>
         <button class="btn btn-restart" onclick="sendAction('restart')"><i class="fas fa-sync-alt"></i> Перезапуск</button>
     </div>
-
     <div id="infoCard" class="info-card" style="display: none;">
         <h3><i class="fas fa-satellite-dish"></i> Данные для подключения</h3>
         <div class="info-row">
@@ -458,7 +398,6 @@ HTML = """<!DOCTYPE html>
             <div id="link" class="info-link"></div>
         </div>
     </div>
-
     <div class="instruction">
         <h3><i class="fas fa-book-open"></i> Инструкция</h3>
         <ol>
@@ -468,13 +407,11 @@ HTML = """<!DOCTYPE html>
             <li>Или просто нажмите на ссылку выше</li>
         </ol>
     </div>
-
     <div class="footer">
         TG WS Proxy для Padavan | WebSocket MTProto Proxy<br>
         <span class="version">by save55</span>
     </div>
 </div>
-
 <script>
     function showToast(message) {
         let toast = document.createElement('div');
@@ -483,13 +420,11 @@ HTML = """<!DOCTYPE html>
         document.body.appendChild(toast);
         setTimeout(() => toast.remove(), 2000);
     }
-
     function copyToClipboard(text) {
         navigator.clipboard.writeText(text).then(() => {
             showToast('✓ Скопировано');
         }).catch(() => showToast('✗ Ошибка'));
     }
-
     function sendAction(action) {
         fetch('/' + action)
             .then(() => {
@@ -498,7 +433,6 @@ HTML = """<!DOCTYPE html>
             })
             .catch(() => showToast('✗ Ошибка связи'));
     }
-
     function update() {
         fetch('/status?t=' + Date.now())
             .then(r => r.json())
@@ -514,10 +448,8 @@ HTML = """<!DOCTYPE html>
                         <div class="status-pid">PID: ${d.pid}</div>
                     `;
                     infoCard.style.display = 'block';
-
                     const fullSecret = 'dd' + d.secret;
                     const link = `tg://proxy?server=${d.host}&port=${d.port}&secret=${fullSecret}`;
-
                     document.getElementById('host').innerHTML = `<span>${d.host}</span><button class="copy-icon" onclick="copyToClipboard('${d.host}')"><i class="fas fa-copy"></i></button>`;
                     document.getElementById('port').innerHTML = `<span>${d.port}</span><button class="copy-icon" onclick="copyToClipboard('${d.port}')"><i class="fas fa-copy"></i></button>`;
                     document.getElementById('secret').innerHTML = `<span>${fullSecret}</span><button class="copy-icon" onclick="copyToClipboard('${fullSecret}')"><i class="fas fa-copy"></i></button>`;
@@ -542,7 +474,6 @@ HTML = """<!DOCTYPE html>
                 `;
             });
     }
-
     setInterval(update, 3000);
     update();
 </script>
@@ -552,7 +483,6 @@ HTML = """<!DOCTYPE html>
 
 class ReuseHTTPServer(HTTPServer):
     allow_reuse_address = True
-
 
 class H(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -564,7 +494,7 @@ class H(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(HTML.encode())
             return
-
+            
         if path == "/status":
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -590,7 +520,7 @@ class H(BaseHTTPRequestHandler):
             else:
                 self.wfile.write(json.dumps({"running": 0}).encode())
             return
-
+            
         if path in ("/start", "/stop", "/restart"):
             action = path.lstrip("/")
             run_init(action)
@@ -605,7 +535,6 @@ class H(BaseHTTPRequestHandler):
 
     def log_message(self, *_args):
         pass
-
 
 if __name__ == "__main__":
     ip = get_lan_ip()
