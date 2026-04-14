@@ -38,6 +38,15 @@ strip_cr_file() {
     mv "$tmp" "$f"
 }
 
+# В upstream init есть pkill; на BusyBox без Entware-pkill stop() ломается или шумит.
+patch_init_if_no_pkill() {
+    [ -f "$INIT_PATH" ] || return 0
+    if have_cmd pkill; then
+        return 0
+    fi
+    sed -i '/pkill.*proxy\.tg_ws_proxy/d' "$INIT_PATH" 2>/dev/null || true
+}
+
 # Без pgrep (часто нет в BusyBox) — иначе статус установки всегда «не запущен».
 proxy_process_running() {
     if have_cmd pgrep; then
@@ -426,6 +435,7 @@ download_init_script() {
         return 1
     fi
     strip_cr_file "$INIT_PATH"
+    patch_init_if_no_pkill
     chmod +x "$INIT_PATH"
     echo -e "${GREEN}Init-скрипт загружен${NC}"
 }
