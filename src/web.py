@@ -94,6 +94,7 @@ HTML = """<!DOCTYPE html>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#ff3b30">
     <title>TG WS Proxy</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * {
             margin: 0;
@@ -196,6 +197,14 @@ HTML = """<!DOCTYPE html>
             transition: all 0.2s ease;
             font-family: inherit;
             text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn i {
+            font-size: 14px;
         }
 
         .btn-start {
@@ -235,6 +244,10 @@ HTML = """<!DOCTYPE html>
             letter-spacing: -0.3px;
         }
 
+        .info-card h3 i {
+            font-size: 18px;
+        }
+
         .info-row {
             display: flex;
             flex-wrap: wrap;
@@ -250,6 +263,14 @@ HTML = """<!DOCTYPE html>
             min-width: 55px;
             font-size: 13px;
             color: #a0a0a0;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .info-label i {
+            font-size: 12px;
+            width: 16px;
         }
 
         .info-value {
@@ -272,7 +293,7 @@ HTML = """<!DOCTYPE html>
             background: none;
             border: none;
             cursor: pointer;
-            font-size: 16px;
+            font-size: 14px;
             padding: 4px 8px;
             border-radius: 8px;
             transition: all 0.2s;
@@ -311,6 +332,9 @@ HTML = """<!DOCTYPE html>
             font-weight: 600;
             margin-bottom: 12px;
             color: #ff3b30;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         .instruction ol {
             padding-left: 20px;
@@ -374,39 +398,39 @@ HTML = """<!DOCTYPE html>
     </div>
 
     <div id="statusCard" class="status-card stopped">
-        <div class="status-icon">⟳</div>
+        <div class="status-icon"><i class="fas fa-circle-notch fa-spin"></i></div>
         <div class="status-text">Загрузка...</div>
         <div class="status-pid"></div>
     </div>
 
     <div class="button-group">
-        <button class="btn btn-start" onclick="sendAction('start')">Запустить</button>
-        <button class="btn btn-stop" onclick="sendAction('stop')">Остановить</button>
-        <button class="btn btn-restart" onclick="sendAction('restart')">Перезапуск</button>
+        <button class="btn btn-start" onclick="sendAction('start')"><i class="fas fa-play"></i> Запустить</button>
+        <button class="btn btn-stop" onclick="sendAction('stop')"><i class="fas fa-stop"></i> Остановить</button>
+        <button class="btn btn-restart" onclick="sendAction('restart')"><i class="fas fa-sync-alt"></i> Перезапуск</button>
     </div>
 
     <div id="infoCard" class="info-card" style="display: none;">
-        <h3>📡 Данные для подключения</h3>
+        <h3><i class="fas fa-satellite-dish"></i> Данные для подключения</h3>
         <div class="info-row">
-            <div class="info-label">🌐 Хост</div>
+            <div class="info-label"><i class="fas fa-globe"></i> Хост</div>
             <div id="host" class="info-value"></div>
         </div>
         <div class="info-row">
-            <div class="info-label">🔌 Порт</div>
+            <div class="info-label"><i class="fas fa-plug"></i> Порт</div>
             <div id="port" class="info-value"></div>
         </div>
         <div class="info-row">
-            <div class="info-label">🔑 Ключ</div>
+            <div class="info-label"><i class="fas fa-key"></i> Ключ</div>
             <div id="secret" class="info-value"></div>
         </div>
         <div class="info-row">
-            <div class="info-label">🔗 Ссылка</div>
+            <div class="info-label"><i class="fas fa-link"></i> Ссылка</div>
             <div id="link" class="info-link"></div>
         </div>
     </div>
 
     <div class="instruction">
-        <h3>📖 Инструкция</h3>
+        <h3><i class="fas fa-book-open"></i> Инструкция</h3>
         <ol>
             <li>Нажмите <b>Запустить</b></li>
             <li>Telegram: Настройки → Данные и память → Прокси</li>
@@ -454,7 +478,7 @@ HTML = """<!DOCTYPE html>
                 if (d.running) {
                     statusCard.className = 'status-card running';
                     statusCard.innerHTML = `
-                        <div class="status-icon">●</div>
+                        <div class="status-icon"><i class="fas fa-circle" style="color: #28a745;"></i></div>
                         <div class="status-text">РАБОТАЕТ</div>
                         <div class="status-pid">PID: ${d.pid}</div>
                     `;
@@ -463,14 +487,14 @@ HTML = """<!DOCTYPE html>
                     const fullSecret = 'dd' + d.secret;
                     const link = `tg://proxy?server=${d.host}&port=${d.port}&secret=${fullSecret}`;
 
-                    document.getElementById('host').innerHTML = `<span>${d.host}</span><button class="copy-icon" onclick="copyToClipboard('${d.host}')">📋</button>`;
-                    document.getElementById('port').innerHTML = `<span>${d.port}</span><button class="copy-icon" onclick="copyToClipboard('${d.port}')">📋</button>`;
-                    document.getElementById('secret').innerHTML = `<span>${fullSecret}</span><button class="copy-icon" onclick="copyToClipboard('${fullSecret}')">📋</button>`;
+                    document.getElementById('host').innerHTML = `<span>${d.host}</span><button class="copy-icon" onclick="copyToClipboard('${d.host}')"><i class="fas fa-copy"></i></button>`;
+                    document.getElementById('port').innerHTML = `<span>${d.port}</span><button class="copy-icon" onclick="copyToClipboard('${d.port}')"><i class="fas fa-copy"></i></button>`;
+                    document.getElementById('secret').innerHTML = `<span>${fullSecret}</span><button class="copy-icon" onclick="copyToClipboard('${fullSecret}')"><i class="fas fa-copy"></i></button>`;
                     document.getElementById('link').innerHTML = `<a href="${link}" target="_blank">${link}</a>`;
                 } else {
                     statusCard.className = 'status-card stopped';
                     statusCard.innerHTML = `
-                        <div class="status-icon">○</div>
+                        <div class="status-icon"><i class="fas fa-circle" style="color: #ff3b30;"></i></div>
                         <div class="status-text">НЕ РАБОТАЕТ</div>
                         <div class="status-pid"></div>
                     `;
@@ -481,7 +505,7 @@ HTML = """<!DOCTYPE html>
                 const statusCard = document.getElementById('statusCard');
                 statusCard.className = 'status-card stopped';
                 statusCard.innerHTML = `
-                    <div class="status-icon">⚠</div>
+                    <div class="status-icon"><i class="fas fa-exclamation-triangle"></i></div>
                     <div class="status-text">Ошибка</div>
                     <div class="status-pid"></div>
                 `;
@@ -550,7 +574,6 @@ class H(BaseHTTPRequestHandler):
 
     def log_message(self, *_args):
         pass
-
 
 if __name__ == "__main__":
     ip = get_lan_ip()
