@@ -79,6 +79,14 @@ def run_init(action):
     subprocess.run(["sh", INIT_SCRIPT, action], check=False)
 
 
+def _request_path(handler):
+    raw = handler.path.split("?", 1)[0].split("#", 1)[0]
+    raw = raw.strip() or "/"
+    if raw != "/" and raw.endswith("/"):
+        raw = raw.rstrip("/")
+    return raw
+
+
 HTML = """<!DOCTYPE html>
 <html>
 <head>
@@ -171,12 +179,17 @@ class ReuseHTTPServer(HTTPServer):
 
 class H(BaseHTTPRequestHandler):
     def do_GET(self):
-        self.send_response(200)
-        if self.path == "/":
+        path = _request_path(self)
+
+        if path == "/":
+            self.send_response(200)
             self.send_header("Content-Type", "text/html;charset=utf-8")
             self.end_headers()
             self.wfile.write(HTML.encode())
-        elif self.path == "/status":
+            return
+
+        if path == "/status":
+            self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             pid = find_proxy_pid()
@@ -199,10 +212,20 @@ class H(BaseHTTPRequestHandler):
                 )
             else:
                 self.wfile.write(json.dumps({"running": 0}).encode())
-        elif self.path in ("/start", "/stop", "/restart"):
+            return
+
+        if path in ("/start", "/stop", "/restart"):
+            action = path.lstrip("/")
+            run_init(action)
+            # 302 надёжнее, чем HTML+script без Content-Type (кнопки в браузере «молчат»).
+            self.send_response(302)
+            self.send_header("Location", "/")
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
             self.end_headers()
-            run_init(self.path[1:])
-            self.wfile.write(b'<script>location.href="/"</script>')
+            return
+
+        self.send_response(404)
+        self.end_headers()
 
     def log_message(self, *_args):
         pass
