@@ -9,7 +9,9 @@ BLUE="\033[0;34m"
 NC="\033[0m"
 
 REPO_URL="https://raw.githubusercontent.com/EdvardBill/tg-ws-proxy/main"
-PROXY_REPO_URL="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip"
+# main — актуальная ветка у многих форков; master оставляем как запасной URL.
+PROXY_REPO_URL="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/main.zip"
+PROXY_REPO_URL_ALT="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip"
 
 BIN_PATH="/opt/bin/tg-ws-proxy"
 INIT_PATH="/opt/etc/init.d/S99tgwsproxy"
@@ -17,6 +19,42 @@ SECRET_FILE="/opt/home/admin/proxy_secret.txt"
 INFO_FILE="/opt/home/admin/proxy_info.txt"
 LOG_FILE="/var/log/tg-ws-proxy.log"
 WEB_SERVER="/tmp/web.py"
+WEB_LOG="/tmp/tg-ws-web.log"
+
+# Запуск init через sh: иначе неверный shebang (bash) или CRLF дают «not found».
+run_init() {
+    [ -f "$INIT_PATH" ] || return 1
+    sh "$INIT_PATH" "$@"
+}
+
+strip_cr_file() {
+    f="$1"
+    [ -f "$f" ] || return 1
+    tmp="${f}.tmp.$$"
+    if ! tr -d '\r' < "$f" > "$tmp" 2>/dev/null; then
+        rm -f "$tmp"
+        return 1
+    fi
+    mv "$tmp" "$f"
+}
+
+# Без pgrep (часто нет в BusyBox) — иначе статус установки всегда «не запущен».
+proxy_process_running() {
+    if have_cmd pgrep; then
+        pgrep -f "proxy.tg_ws_proxy" > /dev/null 2>&1
+        return $?
+    fi
+    ps | grep "proxy.tg_ws_proxy" | grep -v grep > /dev/null 2>&1
+    return $?
+}
+
+proxy_process_pid() {
+    if have_cmd pgrep; then
+        pgrep -f "proxy.tg_ws_proxy" | head -1
+        return
+    fi
+    ps | grep "proxy.tg_ws_proxy" | grep -v grep | awk '{print $1}' | head -1
+}
 
 if [ -d "/opt/home/admin" ]; then
     HOME_DIR="/opt/home/admin"
@@ -59,19 +97,141 @@ resolve_python_cmd() {
 }
 
 have_cmd() {
-    command -v "$1" >/dev/null 2>&1
+    if command -v "$1" >/dev/null 2>&1; then
+        return 0
+    fi
+    for d in /opt/bin /opt/sbin /opt/usr/bin /usr/bin /bin /sbin /usr/sbin; do
+        if [ -x "$d/$1" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+busybox_path() {
+    for bb in busybox /bin/busybox /usr/bin/busybox /sbin/busybox; do
+        if [ -x "$bb" ]; then
+            echo "$bb"
+            return 0
+        fi
+        if command -v "$bb" >/dev/null 2>&1; then
+            command -v "$bb"
+            return 0
+        fi
+    done
+    # На Padavan часто нет имени "busybox", но sed/grep — ссылки на один бинарник.
+    for p in /bin/sed /bin/grep /bin/awk /usr/bin/sed /usr/bin/grep; do
+        [ -e "$p" ] || continue
+        tgt=$(readlink "$p" 2>/dev/null)
+        [ -n "$tgt" ] || continue
+        case "$tgt" in
+            /*)
+                if [ -x "$tgt" ]; then
+                    echo "$tgt"
+                    return 0
+                fi
+                ;;
+            busybox)
+                dir=$(dirname "$p")
+                if [ -x "$dir/busybox" ]; then
+                    echo "$dir/busybox"
+                    return 0
+                fi
+                ;;
+            */busybox)
+                dir=$(dirname "$p")
+                if [ -x "$dir/$tgt" ]; then
+                    echo "$dir/$tgt"
+                    return 0
+                fi
+                ;;
+        esac
+    done
+    return 1
+}
+
+# Рабочая проверка без зависимости от command -v (на кривых PATH).
+essential_tool_ok() {
+    case "$1" in
+        sed)
+            for d in /opt/bin /usr/bin /bin; do
+                if [ -x "$d/sed" ] && echo ok | "$d/sed" 's/ok/ok/' >/dev/null 2>&1; then
+                    return 0
+                fi
+            done
+            echo ok | sed 's/ok/ok/' >/dev/null 2>&1 && return 0
+            ;;
+        awk)
+            for d in /opt/bin /usr/bin /bin; do
+                if [ -x "$d/awk" ] && echo ok | "$d/awk" '{print $1}' >/dev/null 2>&1; then
+                    return 0
+                fi
+            done
+            echo ok | awk '{print $1}' >/dev/null 2>&1 && return 0
+            ;;
+        grep)
+            for d in /opt/bin /usr/bin /bin; do
+                if [ -x "$d/grep" ] && echo ok | "$d/grep" ok >/dev/null 2>&1; then
+                    return 0
+                fi
+            done
+            echo ok | grep ok >/dev/null 2>&1 && return 0
+            ;;
+        xargs)
+            for d in /opt/bin /usr/bin /bin; do
+                if [ -x "$d/xargs" ] && echo ok | "$d/xargs" echo >/dev/null 2>&1; then
+                    return 0
+                fi
+            done
+            echo ok | xargs echo >/dev/null 2>&1 && return 0
+            ;;
+    esac
+    return 1
+}
+
+have_tool() {
+    case "$1" in
+        sed|awk|grep|xargs)
+            essential_tool_ok "$1" && return 0
+            ;;
+    esac
+    if have_cmd "$1"; then
+        return 0
+    fi
+    BB=$(busybox_path) || return 1
+    # На многих BusyBox --help у апплетов не работает — проверяем реальным вызовом.
+    case "$1" in
+        sed)   echo ok | "$BB" sed 's/ok/ok/' >/dev/null 2>&1 ;;
+        awk)   echo ok | "$BB" awk '{print $1}' >/dev/null 2>&1 ;;
+        grep)  echo ok | "$BB" grep ok >/dev/null 2>&1 ;;
+        xargs) echo ok | "$BB" xargs echo >/dev/null 2>&1 ;;
+        *)     "$BB" "$1" --help >/dev/null 2>&1 ;;
+    esac
 }
 
 check_required_tools() {
     MISSING=""
-    for cmd in sed awk grep xargs unzip wget; do
-        if ! have_cmd "$cmd"; then
+    for cmd in sed awk grep xargs; do
+        if ! have_tool "$cmd"; then
             MISSING="$MISSING $cmd"
         fi
     done
     if [ -n "$MISSING" ]; then
+        echo -e "${YELLOW}Не удалось найти утилиты:$MISSING${NC}"
+        echo -e "${CYAN}Пробуем установить через opkg (Entware)...${NC}"
+        opkg update >/dev/null 2>&1
+        opkg install sed grep gawk findutils >/dev/null 2>&1 || true
+        refresh_path
+        MISSING=""
+        for cmd in sed awk grep xargs; do
+            if ! have_tool "$cmd"; then
+                MISSING="$MISSING $cmd"
+            fi
+        done
+    fi
+    if [ -n "$MISSING" ]; then
         echo -e "${RED}Ошибка: отсутствуют утилиты:$MISSING${NC}"
-        echo -e "${YELLOW}Установите недостающие пакеты и повторите.${NC}"
+        echo -e "${YELLOW}Установите вручную: opkg update && opkg install sed grep gawk findutils${NC}"
         return 1
     fi
     return 0
@@ -79,19 +239,19 @@ check_required_tools() {
 
 check_optional_tools() {
     WARNED=0
-    if ! have_cmd pgrep || ! have_cmd pkill; then
+    if ! have_tool pgrep || ! have_tool pkill; then
         echo -e "${YELLOW}Предупреждение: pgrep/pkill не найдены, будет использован fallback через ps/awk.${NC}"
         WARNED=1
     fi
-    if ! have_cmd curl; then
+    if ! have_tool curl; then
         echo -e "${YELLOW}Предупреждение: curl не найден, резервная загрузка недоступна.${NC}"
         WARNED=1
     fi
-    if ! have_cmd hexdump; then
+    if ! have_tool hexdump; then
         echo -e "${YELLOW}Предупреждение: hexdump не найден, генерация секрета перейдет на fallback.${NC}"
         WARNED=1
     fi
-    if ! have_cmd md5sum && ! have_cmd sha256sum; then
+    if ! have_tool md5sum && ! have_tool sha256sum; then
         echo -e "${YELLOW}Предупреждение: md5sum/sha256sum не найдены, будет использован минимальный fallback секрета.${NC}"
         WARNED=1
     fi
@@ -124,7 +284,7 @@ install_python() {
 }
 
 install_unzip() {
-    if have_cmd unzip; then
+    if have_tool unzip; then
         echo -e "${GREEN}UnZip уже установлен .... [OK]${NC}"
     else
         opkg install unzip > /dev/null 2>&1
@@ -133,7 +293,7 @@ install_unzip() {
 }
 
 install_wget() {
-    if have_cmd wget; then
+    if have_tool wget; then
         echo -e "${GREEN}Wget уже установлен .... [OK]${NC}"
     else
         opkg install wget > /dev/null 2>&1
@@ -143,15 +303,15 @@ install_wget() {
 
 generate_secret() {
     SECRET=""
-    if have_cmd hexdump; then
+    if have_tool hexdump; then
         SECRET=$(head -c16 /dev/urandom 2>/dev/null | hexdump -e '16/1 "%02x"' 2>/dev/null)
-    elif have_cmd od; then
+    elif have_tool od; then
         SECRET=$(head -c16 /dev/urandom 2>/dev/null | od -An -tx1 2>/dev/null | tr -d ' \n')
     fi
     if [ -z "$SECRET" ]; then
-        if have_cmd md5sum; then
+        if have_tool md5sum; then
             SECRET=$(date +%s | md5sum | cut -d' ' -f1)
-        elif have_cmd sha256sum; then
+        elif have_tool sha256sum; then
             SECRET=$(date +%s | sha256sum | cut -c1-32)
         else
             SECRET="$(date +%s)$$"
@@ -194,20 +354,40 @@ stop_proxy_processes() {
 }
 
 stop_web_server_process() {
-    if have_cmd pgrep; then
-        pgrep -f "$WEB_SERVER" | xargs kill 2>/dev/null
-        return 0
-    fi
-    PIDS=$(ps | awk -v ws="$WEB_SERVER" '$0 ~ ws && !/awk/ {print $1}')
-    if [ -n "$PIDS" ]; then
-        echo "$PIDS" | xargs kill 2>/dev/null
+    # Несколько проходов: старый /tmp/web.py часто остаётся после прошлых установок.
+    n=0
+    while [ "$n" -lt 4 ]; do
+        n=$((n + 1))
+        if have_cmd pgrep; then
+            for pat in '/tmp/web.py' 'web.py'; do
+                pids=$(pgrep -f "$pat" 2>/dev/null)
+                for pid in $pids; do
+                    kill "$pid" 2>/dev/null
+                done
+            done
+        fi
+        for pid in $(ps 2>/dev/null | awk '/\/tmp\/web\.py/ {print $1}'); do
+            kill "$pid" 2>/dev/null
+        done
+        for pid in $(ps 2>/dev/null | awk '/python/ && /web\.py/ {print $1}'); do
+            kill "$pid" 2>/dev/null
+        done
+        still=$(ps 2>/dev/null | awk '/\/tmp\/web\.py/ {print $1}')
+        [ -z "$still" ] && break
+        sleep 1
+    done
+    for pid in $(ps 2>/dev/null | awk '/\/tmp\/web\.py/ {print $1}'); do
+        kill -9 "$pid" 2>/dev/null
+    done
+    if have_cmd fuser; then
+        fuser -k 8081/tcp 2>/dev/null
     fi
 }
 
 stop_all_proxy() {
     echo -e "${CYAN}Останавливаем старые процессы...${NC}"
     if [ -f "$INIT_PATH" ]; then
-        $INIT_PATH stop 2>/dev/null
+        run_init stop 2>/dev/null
     fi
     # Останавливаем только веб-интерфейс текущего скрипта, не все python3 процессы.
     stop_web_server_process
@@ -227,12 +407,14 @@ download_web_interface() {
         echo -e "${RED}Ошибка: не удалось скачать веб-интерфейс${NC}"
         return 1
     fi
+    strip_cr_file "$WEB_SERVER"
     chmod +x "$WEB_SERVER"
     echo -e "${GREEN}Веб-интерфейс загружен${NC}"
 }
 
 download_init_script() {
     echo -e "${CYAN}Скачиваем init-скрипт...${NC}"
+    mkdir -p "$(dirname "$INIT_PATH")" || true
     if ! wget -q -O "$INIT_PATH" "$REPO_URL/init/S99tgwsproxy"; then
         rm -f "$INIT_PATH"
         echo -e "${RED}Ошибка: не удалось скачать init-скрипт${NC}"
@@ -243,6 +425,7 @@ download_init_script() {
         echo -e "${RED}Ошибка: не удалось скачать init-скрипт${NC}"
         return 1
     fi
+    strip_cr_file "$INIT_PATH"
     chmod +x "$INIT_PATH"
     echo -e "${GREEN}Init-скрипт загружен${NC}"
 }
@@ -251,6 +434,7 @@ install_proxy() {
     echo -e "${MAGENTA}     УСТАНОВКА TG WS PROXY${NC}"
     
     check_entware || return 1
+    refresh_path
     check_required_tools || return 1
     check_optional_tools
     stop_all_proxy
@@ -272,9 +456,13 @@ install_proxy() {
     cd "$HOME_DIR" || return 1
     if ! wget -q --timeout=30 -O tg-ws-proxy.zip "$PROXY_REPO_URL" 2>/dev/null; then
         if ! curl -L --connect-timeout 30 -s -o tg-ws-proxy.zip "$PROXY_REPO_URL"; then
-            echo -e "${RED}Ошибка скачивания!${NC}"
-            PAUSE
-            return 1
+            if ! wget -q --timeout=30 -O tg-ws-proxy.zip "$PROXY_REPO_URL_ALT" 2>/dev/null; then
+                if ! curl -L --connect-timeout 30 -s -o tg-ws-proxy.zip "$PROXY_REPO_URL_ALT"; then
+                    echo -e "${RED}Ошибка скачивания!${NC}"
+                    PAUSE
+                    return 1
+                fi
+            fi
         fi
     fi
     
@@ -285,16 +473,46 @@ install_proxy() {
     fi
     
     echo -e "${CYAN}Распаковываем...${NC}"
-    unzip -o tg-ws-proxy.zip > /dev/null 2>&1
-    
-    if [ -d "tg-ws-proxy-master" ]; then
-        mv tg-ws-proxy-master tg-ws-proxy
-        PROXY_DIR="$HOME_DIR/tg-ws-proxy"
-    else
-        echo -e "${RED}Ошибка: не найдена папка с прокси${NC}"
+    if ! unzip -o tg-ws-proxy.zip > /dev/null 2>&1; then
+        echo -e "${RED}Ошибка: unzip не смог распаковать архив (файл битый или не zip).${NC}"
         PAUSE
         return 1
     fi
+
+    # GitHub кладёт верхний каталог как <repo>-<ветка>: main / master / и т.д.
+    SRC_DIR=""
+    for d in tg-ws-proxy-main tg-ws-proxy-master; do
+        if [ -d "$d" ]; then
+            SRC_DIR="$d"
+            break
+        fi
+    done
+    if [ -z "$SRC_DIR" ]; then
+        for d in tg-ws-proxy-*; do
+            [ -d "$d" ] || continue
+            SRC_DIR="$d"
+            break
+        done
+    fi
+    if [ -z "$SRC_DIR" ]; then
+        for d in *; do
+            [ -d "$d" ] || continue
+            [ -d "$d/proxy" ] || continue
+            SRC_DIR="$d"
+            break
+        done
+    fi
+    if [ -z "$SRC_DIR" ] || [ ! -d "$SRC_DIR/proxy" ]; then
+        echo -e "${RED}Ошибка: не найдена папка с прокси (ожидается каталог с подпапкой proxy).${NC}"
+        echo -e "${YELLOW}Содержимое $HOME_DIR после распаковки:${NC}"
+        ls -la 2>/dev/null
+        PAUSE
+        return 1
+    fi
+
+    rm -rf tg-ws-proxy
+    mv "$SRC_DIR" tg-ws-proxy
+    PROXY_DIR="$HOME_DIR/tg-ws-proxy"
     
     rm -f tg-ws-proxy.zip
     cd "$PROXY_DIR" || return 1
@@ -312,23 +530,28 @@ install_proxy() {
     download_web_interface || return 1
     
     echo -e "${CYAN}Запускаем сервисы...${NC}"
-    $INIT_PATH start
+    if ! run_init start; then
+        echo -e "${RED}Ошибка запуска init-скрипта. Попробуйте вручную: sh $INIT_PATH start${NC}"
+    fi
     sleep 2
-    "$PYTHON_CMD" "$WEB_SERVER" &
+    # Освободить 8081 (старый web.py или другой процесс), иначе второй запуск даёт EADDRINUSE.
+    stop_web_server_process
+    sleep 1
+    "$PYTHON_CMD" "$WEB_SERVER" >>"$WEB_LOG" 2>&1 &
     
     if ! grep -q "tg-ws-proxy" /etc/storage/started_script.sh 2>/dev/null; then
         cat >> /etc/storage/started_script.sh << 'EOF'
 
 # TG WS Proxy
-/opt/etc/init.d/S99tgwsproxy start
-/opt/bin/python3 /tmp/web.py &
+sh /opt/etc/init.d/S99tgwsproxy start
+/opt/bin/python3 /tmp/web.py >>/tmp/tg-ws-web.log 2>&1 &
 EOF
         chmod +x /etc/storage/started_script.sh 2>/dev/null
         /sbin/mtd_storage.sh save > /dev/null 2>&1
     fi
     
     sleep 3
-    if pgrep -f "proxy.tg_ws_proxy" > /dev/null 2>&1; then
+    if proxy_process_running; then
         echo -e "${GREEN}        УСТАНОВКА УСПЕШНО ЗАВЕРШЕНА!${NC}"
         echo -e "\n${CYAN}Веб-интерфейс:${NC} http://$(get_router_ip):8081"
         echo -e "${CYAN}Порт прокси:${NC} 1443"
@@ -348,7 +571,7 @@ delete_proxy() {
     
     echo -e "${CYAN}Останавливаем сервисы...${NC}"
     stop_web_server_process
-    [ -f "$INIT_PATH" ] && $INIT_PATH stop 2>/dev/null
+    [ -f "$INIT_PATH" ] && run_init stop 2>/dev/null
     stop_proxy_processes
     
     echo -e "${CYAN}Удаляем файлы...${NC}"
@@ -359,6 +582,7 @@ delete_proxy() {
     rm -f "$INFO_FILE"
     rm -f "$HOME_DIR/tg-ws-proxy.zip"
     rm -f "$LOG_FILE"
+    rm -f "$WEB_LOG"
     rm -f "$WEB_SERVER"
     
     PYTHON_CMD=$(resolve_python_cmd)
@@ -373,7 +597,8 @@ delete_proxy() {
     echo -e "${CYAN}Удаляем из автозапуска...${NC}"
     sed -i '/TG WS Proxy/d' /etc/storage/started_script.sh 2>/dev/null
     sed -i '/S99tgwsproxy/d' /etc/storage/started_script.sh 2>/dev/null
-    sed -i '\|/opt/bin/python3 /tmp/web.py &|d' /etc/storage/started_script.sh 2>/dev/null
+    sed -i '\|sh /opt/etc/init.d/S99tgwsproxy|d' /etc/storage/started_script.sh 2>/dev/null
+    sed -i '\|/opt/bin/python3 /tmp/web.py|d' /etc/storage/started_script.sh 2>/dev/null
     
     /sbin/mtd_storage.sh save > /dev/null 2>&1
     
@@ -389,9 +614,9 @@ delete_proxy() {
 restart_proxy() {
     if [ -f "$INIT_PATH" ]; then
         echo -e "\n${MAGENTA}Перезапускаем сервис...${NC}"
-        $INIT_PATH restart
+        run_init restart
         sleep 3
-        if pgrep -f "proxy.tg_ws_proxy" > /dev/null 2>&1; then
+        if proxy_process_running; then
             echo -e "${GREEN}✓ Сервис перезапущен${NC}"
         else
             echo -e "${RED}Ошибка при перезапуске${NC}"
@@ -410,8 +635,8 @@ menu() {
     echo -e "${BLUE}║                       by save55        ║${NC}"
     echo -e "${BLUE}╚════════════════════════════════════════╝${NC}"
     
-    if pgrep -f "proxy.tg_ws_proxy" > /dev/null 2>&1; then
-        PID=$(pgrep -f "proxy.tg_ws_proxy" | head -1)
+    if proxy_process_running; then
+        PID=$(proxy_process_pid)
         LOCAL_IP=$(get_router_ip)
         SECRET=$(cat "$SECRET_FILE" 2>/dev/null)
         echo -e "\n${YELLOW}Статус: ${GREEN}● ЗАПУЩЕН${NC} (PID:${PID})"
@@ -432,7 +657,7 @@ menu() {
     read choice
     
     case "$choice" in
-        1) install_proxy ;;
+        1) install_proxy || PAUSE ;;
         2) delete_proxy ;;
         3) restart_proxy ;;
         0)
