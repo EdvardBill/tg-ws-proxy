@@ -361,6 +361,17 @@ HTML = """<!DOCTYPE html>
             70% { opacity: 1; transform: translateX(-50%) scale(1); }
             100% { opacity: 0; transform: translateX(-50%) scale(0.95); visibility: hidden; }
         }
+        
+        /* 3D анимация переворота для иконки */
+        @keyframes flip3D {
+            0% { transform: perspective(400px) rotateY(0); }
+            100% { transform: perspective(400px) rotateY(360deg); }
+        }
+        
+        .flip-icon {
+            display: inline-block;
+            animation: flip3D 1.2s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite;
+        }
     </style>
 </head>
 <body>
@@ -443,7 +454,7 @@ HTML = """<!DOCTYPE html>
                 if (d.running) {
                     statusCard.className = 'status-card running';
                     statusCard.innerHTML = `
-                        <div class="status-icon"><i class="fas fa-circle" style="color: #28a745;"></i></div>
+                        <div class="status-icon"><i class="fas fa-circle flip-icon" style="color: #28a745;"></i></div>
                         <div class="status-text">РАБОТАЕТ</div>
                         <div class="status-pid">PID: ${d.pid}</div>
                     `;
