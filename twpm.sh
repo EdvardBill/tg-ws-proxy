@@ -507,12 +507,8 @@ EOF
         /sbin/mtd_storage.sh save > /dev/null 2>&1
     fi
     sleep 3
-    if proxy_process_running; then
+       if proxy_process_running; then
         echo -e "${GREEN}УСТАНОВКА УСПЕШНО ЗАВЕРШЕНА!${NC}"
-        echo -e "\n${CYAN}Веб-интерфейс:${NC} http://$(get_router_ip):8081"
-        echo -e "${CYAN}Порт прокси:${NC} 1443"
-        echo -e "${CYAN}Ключ:${NC} dd$SECRET"
-        echo -e "\n${CYAN}Ссылка для Telegram:${NC} tg://proxy?server=$(get_router_ip)&port=1443&secret=dd$SECRET"
     else
         echo -e "\n${RED}Ошибка: Сервис не запустился.${NC}"
         echo -e "${YELLOW}Проверьте логи: cat $LOG_FILE${NC}"
