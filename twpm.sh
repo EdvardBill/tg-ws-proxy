@@ -243,7 +243,6 @@ check_optional_tools() {
 }
 
 install_python() {
-    echo -e "${MAGENTA}Проверяем наличие Python...${NC}"
     PYTHON_CMD=$(resolve_python_cmd)
     if [ -z "$PYTHON_CMD" ]; then
         echo -e "${YELLOW}Python не найден. Устанавливаем...${NC}"
