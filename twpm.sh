@@ -578,10 +578,11 @@ restart_proxy() {
 menu() {
     refresh_path
     clear
-    echo -e "${BLUE}╔════════════════════════════════════════╗${NC}"
-    echo -e "${BLUE}║         TG WS Proxy для Padavan        ║${NC}"
-    echo -e "${BLUE}║                       by save55        ║${NC}"
-    echo -e "${BLUE}╚════════════════════════════════════════╝${NC}"
+   echo -e "${RED} ___________  _      ______  ___                   ${NC}"
+    echo -e "${RED}/_  __/ ___/ | | /| / / __/ / _ \_______ __ ____ __${NC}"
+    echo -e "${RED} / / / (_ /  | |/ |/ /\ \  / ___/ __/ _ \\\\ \ / // /${NC}"
+    echo -e "${RED}/_/  \___/   |__/|__/___/ /_/  /_/  \___/_\_\\_, / ${NC}"
+    echo -e "${RED}                                            /___/  ${NC}"
     if proxy_process_running; then
         PID=$(proxy_process_pid)
         LOCAL_IP=$(get_router_ip)
