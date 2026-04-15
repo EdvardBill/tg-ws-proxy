@@ -165,16 +165,18 @@ HTML = """<!DOCTYPE html>
         }
         .button-group {
             display: flex;
-            gap: 12px;
+            flex-wrap: wrap;
+            gap: 10px;
             margin-bottom: 32px;
         }
         .btn {
             flex: 1;
+            min-width: 100px;
             background: #0f0f0f;
             border: 1px solid #2a2a2a;
             color: #e0e0e0;
-            padding: 12px 16px;
-            font-size: 15px;
+            padding: 10px 8px;
+            font-size: 13px;
             font-weight: 500;
             border-radius: 14px;
             cursor: pointer;
@@ -184,10 +186,10 @@ HTML = """<!DOCTYPE html>
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
+            gap: 6px;
         }
         .btn i {
-            font-size: 14px;
+            font-size: 12px;
         }
         .btn-start {
             border-color: #28a745;
@@ -336,7 +338,12 @@ HTML = """<!DOCTYPE html>
         @media (max-width: 480px) {
             body { padding: 16px 12px 32px; }
             .button-group { gap: 8px; }
-            .btn { padding: 10px 12px; font-size: 14px; }
+            .btn { 
+                padding: 8px 6px; 
+                font-size: 12px;
+                min-width: 80px;
+            }
+            .btn i { font-size: 11px; }
             .info-value { font-size: 11px; padding: 6px 10px; }
         }
         .toast {
