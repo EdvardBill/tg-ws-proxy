@@ -103,6 +103,37 @@ HTML = """<!DOCTYPE html>
             padding: 20px 16px 40px;
             margin: 0;
             min-height: 100vh;
+            overflow: hidden;
+            transition: background-color 0.3s ease;
+        }
+    
+        .dark-mode-toggle {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: #111;
+            border-radius: 50%;
+            padding: 8px;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+    
+        .dark-mode-toggle:hover {
+            background: #222;
+        }
+    
+        .dark-mode-toggle i {
+            font-size: 16px;
+            color: #fff;
+        }
+    
+        .dark-mode-toggle.dark {
+            background: #333;
+        }
+    
+        .dark-mode-toggle.dark i {
+            color: #fff;
         }
         .container {
             max-width: 600px;

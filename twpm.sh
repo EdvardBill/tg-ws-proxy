@@ -62,6 +62,20 @@ proxy_process_pid() {
     ps | grep "proxy.tg_ws_proxy" | grep -v grep | awk '{print $1}' | head -1
 }
 
+monitor_system() {
+    if have_cmd top; then
+        CPU_USAGE=$(top -bn1 2>/dev/null | grep "CPU:" | awk '{print 100 - $8}' | head -1)
+    else
+        CPU_USAGE="N/A"
+    fi
+    if have_cmd free; then
+        MEM_USAGE=$(free 2>/dev/null | grep Mem | awk '{printf "%.1f", $3/$2 * 100}')
+    else
+        MEM_USAGE="N/A"
+    fi
+    echo -e "${CYAN}Система: CPU ${CPU_USAGE}% | MEM ${MEM_USAGE}%${NC}"
+}
+
 if [ -d "/opt/home/admin" ]; then
     HOME_DIR="/opt/home/admin"
 elif [ -d "/root" ]; then
@@ -79,9 +93,35 @@ PAUSE() {
 
 check_entware() {
     if [ ! -d "/opt/bin" ] || [ ! -f "/opt/etc/opkg.conf" ]; then
-        echo -e "${RED}Ошибка: Entware не найден. Установите Entware сначала.${NC}"
-        PAUSE
-        return 1
+        echo -e "${RED}Ошибка: Entware не найден. Попытка автоматической установки...${NC}"
+        if ! command -v opkg >/dev/null 2>&1; then
+            ARCH=$(uname -m)
+            if [ "$ARCH" = "mipsel" ] || [ "$ARCH" = "mips" ]; then
+                echo -e "${CYAN}Детектирована архитектура $ARCH. Скачиваем Entware...${NC}"
+                mkdir -p /opt
+                cd /opt
+                if [ -f "entware-install.sh" ]; then
+                    rm -f entware-install.sh
+                fi
+                curl -s -O https://bin.entware.net/mipssf-k3.4/entware-install.sh
+                chmod +x entware-install.sh
+                ./entware-install.sh
+                if [ $? -ne 0 ]; then
+                    echo -e "${RED}Ошибка: Не удалось установить Entware автоматически. Установите вручную.${NC}"
+                    PAUSE
+                    exit 1
+                fi
+            else
+                echo -e "${RED}Ошибка: Неподдерживаемая архитектура $ARCH. Установите Entware вручную.${NC}"
+                PAUSE
+                exit 1
+            fi
+        fi
+        if [ ! -d "/opt/bin" ] || [ ! -f "/opt/etc/opkg.conf" ]; then
+            echo -e "${RED}Ошибка: Entware всё ещё не установлен. Установите вручную.${NC}"
+            PAUSE
+            exit 1
+        fi
     fi
     return 0
 }
@@ -247,7 +287,13 @@ install_python() {
     if [ -z "$PYTHON_CMD" ]; then
         echo -e "${YELLOW}Python не найден. Устанавливаем...${NC}"
         opkg update > /dev/null 2>&1
-        opkg install python3 python3-pip python3-dev > /dev/null 2>&1
+        ARCH=$(uname -m)
+        if [ "$ARCH" = "mipsel" ] || [ "$ARCH" = "mips" ]; then
+            echo -e "${CYAN}Оптимизация для mipsel: устанавливаем python3-lite...${NC}"
+            opkg install python3-lite python3-pip > /dev/null 2>&1
+        else
+            opkg install python3 python3-pip python3-dev > /dev/null 2>&1
+        fi
         refresh_path
         PYTHON_CMD=$(resolve_python_cmd)
     fi
@@ -591,6 +637,7 @@ menu() {
     else
         echo -e "\n${YELLOW}Статус: ${RED}○ НЕ ЗАПУЩЕН${NC}"
     fi
+    monitor_system
     echo -e "\n${GREEN}1) Установить${NC}"
     echo -e "${GREEN}2) Удалить${NC}"
     echo -e "${GREEN}3) Перезапустить${NC}"
