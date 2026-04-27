@@ -140,11 +140,6 @@ cat /tmp/tg-ws-web.log
 
 Проект использует [tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy) в качестве backend.
 
-## Автор
-
-save55
-
 ## Ссылки
 
-- [tg-ws-proxy (backend)](https://github.com/Flowseal/tg-ws-proxy)
-- [4PDA](https://bitbucket.org/padavan/rt-n56u/wiki/RU_DescriptionOfSettings)
+[4PDA](https://bitbucket.org/padavan/rt-n56u/wiki/RU_DescriptionOfSettings)
