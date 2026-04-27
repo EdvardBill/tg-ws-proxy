@@ -67,30 +67,13 @@ monitor_system() {
     CPU_USAGE="N/A"
     MEM_USAGE="N/A"
     
-    # CPU usage via top (most compatible)
-    if have_cmd top; then
-        CPU_RAW=$(top -bn1 2>/dev/null | grep -m1 "CPU:" | awk '{print $8}' | tr -d '%')
-        if [ -n "$CPU_RAW" ] && [ "$CPU_RAW" -eq "$CPU_RAW" ] 2>/dev/null; then
-            CPU_USAGE=$(awk "BEGIN {printf \"%.0f\", 100 - $CPU_RAW}")
-        fi
-    fi
-
-    # Memory usage via free or /proc/meminfo
+    # Memory usage
     if have_cmd free; then
-        MEM_RAW=$(free 2>/dev/null | grep Mem | awk '{print $3/$2 * 100}')
-        if [ -n "$MEM_RAW" ]; then
-            MEM_USAGE=$(awk "BEGIN {printf \"%.1f\", $MEM_RAW}")
-        fi
-    elif [ -f /proc/meminfo ]; then
-        MEM_TOTAL=$(grep -m1 MemTotal /proc/meminfo | awk '{print $2}')
-        MEM_AVAIL=$(grep -m1 MemAvailable /proc/meminfo | awk '{print $2}')
-        [ -z "$MEM_AVAIL" ] && MEM_AVAIL=$(grep -m1 MemFree /proc/meminfo | awk '{print $2}')
-        if [ -n "$MEM_TOTAL" ] && [ -n "$MEM_AVAIL" ]; then
-            MEM_USAGE=$(awk "BEGIN {printf \"%.1f\", ($MEM_TOTAL - $MEM_AVAIL) / $MEM_TOTAL * 100}")
-        fi
+        MEM_RAW=$(free 2>/dev/null | grep Mem | awk '{print int($3/$2 * 100)}')
+        [ -n "$MEM_RAW" ] && MEM_USAGE="$MEM_RAW"
     fi
     
-    echo -e "${CYAN}Система: CPU ${CPU_USAGE}% | MEM ${MEM_USAGE}%${NC}"
+    echo -e "${CYAN}Система: MEM ${MEM_USAGE}%${NC}"
 }
 
 if [ -d "/opt/home/admin" ]; then
