@@ -559,20 +559,19 @@ HTML = """<!DOCTYPE html>
     </div>
 </div>
 <script>
-    let originalConfig = { host: '', port: '', secret: '' };
-    let hasChanges = false;
-    let userEditing = false;
+    let serverConfig = { host: '', port: '', secret: '' };
+    let userConfig = { host: '', port: '', secret: '' };
+    let saveTimeout = null;
 
     function showToast(msg) {
         let t = document.createElement('div');
         t.className = 'toast';
         t.textContent = msg;
         document.body.appendChild(t);
-        setTimeout(() => t.remove(), 2000);
+        setTimeout(() => t.remove(), 2500);
     }
     function copyValue(type) {
-        let el = document.getElementById('edit' + type.charAt(0).toUpperCase() + type.slice(1));
-        let val = el.value.trim();
+        let val = userConfig[type];
         if (type === 'secret') val = 'dd' + val;
         navigator.clipboard.writeText(val).then(() => showToast('✓')).catch(() => showToast('✗'));
     }
@@ -580,13 +579,13 @@ HTML = """<!DOCTYPE html>
         let h = document.getElementById('editHost').value.trim();
         let p = document.getElementById('editPort').value.trim();
         let s = document.getElementById('editSecret').value.trim();
-        hasChanges = (h !== originalConfig.host) || (p !== originalConfig.port) || (s !== originalConfig.secret);
-        document.getElementById('btnRestart').disabled = !hasChanges;
-    }
-    function onFocus() { userEditing = true; }
-    function onBlur() { 
-        userEditing = false; 
-        checkChange();
+        
+        userConfig.host = h;
+        userConfig.port = p;
+        userConfig.secret = s;
+        
+        let changed = (h !== serverConfig.host) || (p !== serverConfig.port) || (s !== serverConfig.secret);
+        document.getElementById('btnRestart').disabled = !changed;
     }
     function doRestart() {
         let h = document.getElementById('editHost').value.trim();
@@ -596,9 +595,9 @@ HTML = """<!DOCTYPE html>
         showToast('⟳ Сохранение...');
         
         Promise.all([
-            h !== originalConfig.host ? fetch('/config?type=host&value=' + encodeURIComponent(h)).then(r => r.json()) : Promise.resolve({ok:true}),
-            p !== originalConfig.port ? fetch('/config?type=port&value=' + encodeURIComponent(p)).then(r => r.json()) : Promise.resolve({ok:true}),
-            s !== originalConfig.secret ? fetch('/config?type=secret&value=' + encodeURIComponent(s)).then(r => r.json()) : Promise.resolve({ok:true})
+            fetch('/config?type=host&value=' + encodeURIComponent(h)).then(r => r.json()),
+            fetch('/config?type=port&value=' + encodeURIComponent(p)).then(r => r.json()),
+            fetch('/config?type=secret&value=' + encodeURIComponent(s)).then(r => r.json())
         ]).then(results => {
             let err = results.find(r => !r.ok);
             if (err && err.error) {
@@ -606,15 +605,8 @@ HTML = """<!DOCTYPE html>
                 return;
             }
             showToast('✓ Перезапуск...');
-            userEditing = false;
             fetch('/restart', { method: 'POST' }).then(() => {
-                setTimeout(function(){ 
-                    originalConfig.host = h;
-                    originalConfig.port = p;
-                    originalConfig.secret = s;
-                    hasChanges = false;
-                    update(); 
-                }, 1000);
+                setTimeout(update, 1500);
             }).catch(() => showToast('✗'));
         }).catch(() => showToast('✗'));
     }
@@ -625,6 +617,12 @@ HTML = """<!DOCTYPE html>
                 setTimeout(update, 800);
             })
             .catch(() => showToast('✗'));
+    }
+    function renderConfig() {
+        let cfg = userConfig;
+        let fs = 'dd' + cfg.secret;
+        let link = 'tg://proxy?server=' + cfg.host + '&port=' + cfg.port + '&secret=' + fs;
+        document.getElementById('link').innerHTML = '<a href="' + link + '" target="_blank">' + link + '</a>';
     }
     function update() {
         fetch('/status?t=' + Date.now())
@@ -637,21 +635,37 @@ HTML = """<!DOCTYPE html>
                     sc.innerHTML = '<div class="status-icon"><i class="fas fa-circle pulse-icon" style="color:#28a745;"></i></div><div class="status-text">РАБОТАЕТ</div><div class="status-pid">PID: ' + d.pid + '</div>';
                     ic.style.display = 'block';
                     
-                    // Не перезаписывать значения если пользователь редактирует
-                    if (!userEditing) {
-                        originalConfig.host = d.host || '';
-                        originalConfig.port = d.port || '';
-                        originalConfig.secret = d.secret || '';
-                        document.getElementById('editHost').value = originalConfig.host;
-                        document.getElementById('editPort').value = originalConfig.port;
-                        document.getElementById('editSecret').value = originalConfig.secret;
+                    serverConfig.host = d.host || '';
+                    serverConfig.port = d.port || '';
+                    serverConfig.secret = d.secret || '';
+                    
+                    // Сохраняем текущие значения полей перед обновлением
+                    let curH = document.getElementById('editHost').value.trim();
+                    let curP = document.getElementById('editPort').value.trim();
+                    let curS = document.getElementById('editSecret').value.trim();
+                    
+                    // Обновляем значения
+                    document.getElementById('editHost').value = serverConfig.host;
+                    document.getElementById('editPort').value = serverConfig.port;
+                    document.getElementById('editSecret').value = serverConfig.secret;
+                    
+                    // Восстанавливаем пользовательские значения если были изменения
+                    let changed = (curH !== serverConfig.host) || (curP !== serverConfig.port) || (curS !== serverConfig.secret);
+                    if (changed) {
+                        document.getElementById('editHost').value = curH;
+                        document.getElementById('editPort').value = curP;
+                        document.getElementById('editSecret').value = curS;
+                        userConfig.host = curH;
+                        userConfig.port = curP;
+                        userConfig.secret = curS;
+                    } else {
+                        userConfig.host = serverConfig.host;
+                        userConfig.port = serverConfig.port;
+                        userConfig.secret = serverConfig.secret;
                     }
                     
-                    let fs = 'dd' + originalConfig.secret;
-                    let link = 'tg://proxy?server=' + originalConfig.host + '&port=' + originalConfig.port + '&secret=' + fs;
-                    document.getElementById('link').innerHTML = '<a href="' + link + '" target="_blank">' + link + '</a>';
-                    
-                    if (!userEditing) checkChange();
+                    renderConfig();
+                    checkChange();
                 } else {
                     sc.className = 'status-card stopped';
                     sc.innerHTML = '<div class="status-icon"><i class="fas fa-circle" style="color:#ff3b30;"></i></div><div class="status-text">НЕ РАБОТАЕТ</div>';
@@ -664,13 +678,10 @@ HTML = """<!DOCTYPE html>
                 sc.innerHTML = '<div class="status-icon"><i class="fas fa-exclamation-triangle"></i></div><div class="status-text">Ошибка</div>';
             });
     }
-    document.getElementById('editHost').addEventListener('focus', onFocus);
-    document.getElementById('editHost').addEventListener('blur', onBlur);
-    document.getElementById('editPort').addEventListener('focus', onFocus);
-    document.getElementById('editPort').addEventListener('blur', onBlur);
-    document.getElementById('editSecret').addEventListener('focus', onFocus);
-    document.getElementById('editSecret').addEventListener('blur', onBlur);
-    setInterval(update, 5000);
+    document.getElementById('editHost').addEventListener('input', checkChange);
+    document.getElementById('editPort').addEventListener('input', checkChange);
+    document.getElementById('editSecret').addEventListener('input', checkChange);
+    setInterval(update, 10000);
     update();
 </script>
 </body>
