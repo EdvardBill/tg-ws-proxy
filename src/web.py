@@ -525,17 +525,17 @@ HTML = """<!DOCTYPE html>
         <h3><i class="fas fa-satellite-dish"></i> Данные для подключения</h3>
         <div class="info-row">
             <div class="info-label"><i class="fas fa-globe"></i> Хост</div>
-            <input type="text" id="editHost" class="edit-input" onchange="checkChange()">
+            <input type="text" id="editHost" class="edit-input">
             <button class="copy-icon" onclick="copyValue('host')"><i class="fas fa-copy"></i></button>
         </div>
         <div class="info-row">
             <div class="info-label"><i class="fas fa-plug"></i> Порт</div>
-            <input type="text" id="editPort" class="edit-input" onchange="checkChange()">
+            <input type="text" id="editPort" class="edit-input">
             <button class="copy-icon" onclick="copyValue('port')"><i class="fas fa-copy"></i></button>
         </div>
         <div class="info-row">
             <div class="info-label"><i class="fas fa-key"></i> Ключ</div>
-            <input type="text" id="editSecret" class="edit-input" onchange="checkChange()">
+            <input type="text" id="editSecret" class="edit-input">
             <button class="copy-icon" onclick="copyValue('secret')"><i class="fas fa-copy"></i></button>
         </div>
         <div class="info-row">
@@ -602,7 +602,8 @@ HTML = """<!DOCTYPE html>
             window.serverSecret = s;
             showToast('✓ Перезапуск...');
             fetch('/restart', { method: 'POST' }).then(() => {
-                updateStatusOnce();
+                checkChange();
+                renderLink();
             }).catch(() => showToast('✗'));
         }).catch(() => showToast('✗'));
     }
