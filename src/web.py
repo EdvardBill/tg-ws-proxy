@@ -348,6 +348,10 @@ HTML = """<!DOCTYPE html>
             min-width: 100px;
         }
         .info-row .edit-input:focus { border-color: #28a745; }
+        .info-row input.edit-input {
+            flex: 1;
+            margin-right: 8px;
+        }
         .settings-card {
             background: #0f0f0f;
             border: 1px solid #2a2a2a;
@@ -557,6 +561,7 @@ HTML = """<!DOCTYPE html>
 <script>
     let originalConfig = { host: '', port: '', secret: '' };
     let hasChanges = false;
+    let userEditing = false;
 
     function showToast(msg) {
         let t = document.createElement('div');
@@ -578,6 +583,11 @@ HTML = """<!DOCTYPE html>
         hasChanges = (h !== originalConfig.host) || (p !== originalConfig.port) || (s !== originalConfig.secret);
         document.getElementById('btnRestart').disabled = !hasChanges;
     }
+    function onFocus() { userEditing = true; }
+    function onBlur() { 
+        userEditing = false; 
+        checkChange();
+    }
     function doRestart() {
         let h = document.getElementById('editHost').value.trim();
         let p = document.getElementById('editPort').value.trim();
@@ -596,7 +606,16 @@ HTML = """<!DOCTYPE html>
                 return;
             }
             showToast('✓ Перезапуск...');
-            fetch('/restart', { method: 'POST' }).then(() => setTimeout(update, 800)).catch(() => showToast('✗'));
+            userEditing = false;
+            fetch('/restart', { method: 'POST' }).then(() => {
+                setTimeout(function(){ 
+                    originalConfig.host = h;
+                    originalConfig.port = p;
+                    originalConfig.secret = s;
+                    hasChanges = false;
+                    update(); 
+                }, 1000);
+            }).catch(() => showToast('✗'));
         }).catch(() => showToast('✗'));
     }
     function sendAction(action) {
@@ -617,16 +636,22 @@ HTML = """<!DOCTYPE html>
                     sc.className = 'status-card running';
                     sc.innerHTML = '<div class="status-icon"><i class="fas fa-circle pulse-icon" style="color:#28a745;"></i></div><div class="status-text">РАБОТАЕТ</div><div class="status-pid">PID: ' + d.pid + '</div>';
                     ic.style.display = 'block';
-                    originalConfig.host = d.host || '';
-                    originalConfig.port = d.port || '';
-                    originalConfig.secret = d.secret || '';
-                    document.getElementById('editHost').value = originalConfig.host;
-                    document.getElementById('editPort').value = originalConfig.port;
-                    document.getElementById('editSecret').value = originalConfig.secret;
+                    
+                    // Не перезаписывать значения если пользователь редактирует
+                    if (!userEditing) {
+                        originalConfig.host = d.host || '';
+                        originalConfig.port = d.port || '';
+                        originalConfig.secret = d.secret || '';
+                        document.getElementById('editHost').value = originalConfig.host;
+                        document.getElementById('editPort').value = originalConfig.port;
+                        document.getElementById('editSecret').value = originalConfig.secret;
+                    }
+                    
                     let fs = 'dd' + originalConfig.secret;
                     let link = 'tg://proxy?server=' + originalConfig.host + '&port=' + originalConfig.port + '&secret=' + fs;
                     document.getElementById('link').innerHTML = '<a href="' + link + '" target="_blank">' + link + '</a>';
-                    checkChange();
+                    
+                    if (!userEditing) checkChange();
                 } else {
                     sc.className = 'status-card stopped';
                     sc.innerHTML = '<div class="status-icon"><i class="fas fa-circle" style="color:#ff3b30;"></i></div><div class="status-text">НЕ РАБОТАЕТ</div>';
@@ -639,9 +664,12 @@ HTML = """<!DOCTYPE html>
                 sc.innerHTML = '<div class="status-icon"><i class="fas fa-exclamation-triangle"></i></div><div class="status-text">Ошибка</div>';
             });
     }
-    document.getElementById('editHost').addEventListener('input', checkChange);
-    document.getElementById('editPort').addEventListener('input', checkChange);
-    document.getElementById('editSecret').addEventListener('input', checkChange);
+    document.getElementById('editHost').addEventListener('focus', onFocus);
+    document.getElementById('editHost').addEventListener('blur', onBlur);
+    document.getElementById('editPort').addEventListener('focus', onFocus);
+    document.getElementById('editPort').addEventListener('blur', onBlur);
+    document.getElementById('editSecret').addEventListener('focus', onFocus);
+    document.getElementById('editSecret').addEventListener('blur', onBlur);
     setInterval(update, 5000);
     update();
 </script>
