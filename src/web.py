@@ -522,25 +522,23 @@ HTML = """<!DOCTYPE html>
             <div class="info-label"><i class="fas fa-link"></i> Ссылка</div>
             <div id="link" class="info-link"></div>
         </div>
-    </div>
-    <div id="settingsCard" class="settings-card">
-        <h3><i class="fas fa-cog"></i> Настройки</h3>
-        <div class="settings-row">
-            <span class="settings-label">Хост</span>
+        <h3 style="margin-top: 16px;"><i class="fas fa-edit"></i> Редактирование</h3>
+        <div class="info-row">
+            <div class="info-label"><i class="fas fa-globe"></i> Хост</div>
             <input type="text" id="editHost" class="edit-input" placeholder="IP адрес">
             <button class="edit-icon" onclick="saveSetting('host')"><i class="fas fa-save"></i></button>
         </div>
-        <div class="settings-row">
-            <span class="settings-label">Порт</span>
+        <div class="info-row">
+            <div class="info-label"><i class="fas fa-plug"></i> Порт</div>
             <input type="number" id="editPort" class="edit-input" placeholder="1443">
             <button class="edit-icon" onclick="saveSetting('port')"><i class="fas fa-save"></i></button>
         </div>
-        <div class="settings-row">
-            <span class="settings-label">Ключ</span>
+        <div class="info-row">
+            <div class="info-label"><i class="fas fa-key"></i> Ключ</div>
             <input type="text" id="editSecret" class="edit-input" placeholder="секретный ключ (32 символа)">
             <button class="edit-icon" onclick="saveSetting('secret')"><i class="fas fa-save"></i></button>
         </div>
-        <button id="btnRestart" class="btn-save" onclick="restartWithNewConfig()" disabled><i class="fas fa-sync"></i> Сохранить и перезапустить</button>
+        <button id="btnRestart" class="btn-save" onclick="restartWithNewConfig()" disabled style="margin-top: 16px;"><i class="fas fa-sync"></i> Сохранить и перезапустить</button>
     </div>
     <div class="instruction">
         <h3><i class="fas fa-book-open"></i> Инструкция</h3>
