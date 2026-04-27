@@ -16,6 +16,7 @@ PROXY_REPO_URL_ALT="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/m
 BIN_PATH="/opt/bin/tg-ws-proxy"
 INIT_PATH="/opt/etc/init.d/S99tgwsproxy"
 SECRET_FILE="/opt/home/admin/proxy_secret.txt"
+PID_FILE="/var/run/tg-ws-proxy.pid"
 INFO_FILE="/opt/home/admin/proxy_info.txt"
 LOG_FILE="/var/log/tg-ws-proxy.log"
 WEB_SERVER="/tmp/web.py"
@@ -573,6 +574,7 @@ delete_proxy() {
     rm -f "$BIN_PATH"
     rm -f "$INIT_PATH"
     rm -f "$SECRET_FILE"
+    rm -f "$PID_FILE"
     rm -f "$INFO_FILE"
     rm -f "$HOME_DIR/tg-ws-proxy.zip"
     rm -f "$LOG_FILE"
@@ -592,12 +594,8 @@ delete_proxy() {
     sed -i '\|sh /opt/etc/init.d/S99tgwsproxy|d' /etc/storage/started_script.sh 2>/dev/null
     sed -i '\|/opt/bin/python3 /tmp/web.py|d' /etc/storage/started_script.sh 2>/dev/null
     /sbin/mtd_storage.sh save > /dev/null 2>&1
-    echo -e "${CYAN}Удаляем скрипт...${NC}"
-    rm -f "$0"
     echo -e "${GREEN}УДАЛЕНИЕ ЗАВЕРШЕНО!${NC}"
-    echo -e "${YELLOW}Скрипт удален. Нажмите Enter для выхода...${NC}"
-    read dummy
-    exit 0
+    PAUSE
 }
 
 restart_proxy() {
