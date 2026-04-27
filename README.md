@@ -8,31 +8,10 @@ WebSocket MTProto Proxy сервер для роутеров с прошивко
 - **Веб-интерфейс управления** с информацией о подключении и копированием данных
 - **Автозапуск** - прокси автоматически запускается при старте роутера
 - **Простая установка** - один скрипт с интерактивным меню
-- **Системный мониторинг** - отображение загрузки CPU и памяти
-
-## Требования
-
-- Роутер с прошивкой Padavan (на базе Linux/mipsel или mips)
-- Entware (устанавливается автоматически при необходимости)
-- Python 3
-- Python cryptography модуль
-- Свободные порты: 1443 (прокси), 8081 (веб-интерфейс)
-
-## Структура проекта
-
-```
-tg-ws-proxy/
-├── twpm.sh              # Главный скрипт управления (запуск на ПК)
-├── init/
-│   └── S99tgwsproxy    # Init-скрипт для автозапуска на роутере
-├── src/
-│   └── web.py           # Веб-интерфейс управления прокси
-└── README.md
-```
-
+  
 ## Установка
 
-### Вариант 1: Установка с ПК через SSH (рекомендуется)
+### Вариант 1: Установка с ПК через SSH
 
 1. Скачайте `twpm.sh` на компьютер
 2. Подключитесь к роутеру по SSH:
@@ -54,7 +33,7 @@ tg-ws-proxy/
 
 1. Скачайте `twpm.sh` напрямую на роутер:
    ```bash
-   curl -sL https://raw.githubusercontent.com/save55/tg-ws-proxy/main/twpm.sh -o /tmp/twpm.sh
+   curl -sL https://raw.githubusercontent.com/EdvardBill/tg-ws-proxy/main/twpm.sh -o /tmp/twpm.sh
    chmod +x /tmp/twpm.sh
    ```
 2. Запустите:
@@ -103,26 +82,6 @@ sh /opt/etc/init.d/S99tgwsproxy stop
 sh /opt/etc/init.d/S99tgwsproxy restart
 ```
 
-## Конфигурация
-
-### Файлы
-
-| Файл | Описание |
-|------|----------|
-| `/opt/home/admin/proxy_secret.txt` | Секретный ключ для подключения |
-| `/var/run/tg-ws-proxy.pid` | PID запущенного процесса |
-| `/var/log/tg-ws-proxy.log` | Логи работы прокси |
-| `/tmp/web.py` | Веб-интерфейс |
-| `/tmp/tg-ws-web.log` | Логи веб-сервера |
-
-### Параметры
-
-| Параметр | Значение по умолчанию | Описание |
-|----------|----------------------|----------|
-| Порт прокси | 1443 | Порт для MTProto подключений |
-| Порт веб-интерфейса | 8081 | Порт HTTP сервера управления |
-| IP адрес | LAN IP роутера | Адрес для подключения клиентов |
-
 ### Изменение секретного ключа
 
 ```bash
@@ -132,36 +91,6 @@ openssl rand -hex 16 > /opt/home/admin/proxy_secret.txt
 # Перезапустить прокси
 sh /opt/etc/init.d/S99tgwsproxy restart
 ```
-
-## Удаление
-
-1. Запустите скрипт управления:
-   ```bash
-   /tmp/twpm.sh
-   ```
-2. Выберите **2) Удалить**
-
-Или выполните вручную:
-
-```bash
-# Остановить сервисы
-sh /opt/etc/init.d/S99tgwsproxy stop
-pkill -f "proxy.tg_ws_proxy"
-pkill -f "web.py"
-
-# Удалить файлы
-rm -rf /opt/home/admin/tg-ws-proxy
-rm -f /opt/etc/init.d/S99tgwsproxy
-rm -f /opt/home/admin/proxy_secret.txt
-rm -f /tmp/web.py
-rm -f /var/log/tg-ws-proxy.log
-rm -f /tmp/tg-ws-web.log
-
-# Удалить из автозапуска
-sed -i '/TG WS Proxy/d' /etc/storage/started_script.sh
-mtd_storage.sh save
-```
-
 ## Диагностика
 
 ### Проверка статуса
@@ -169,9 +98,6 @@ mtd_storage.sh save
 ```bash
 # Проверить, запущен ли процесс
 pgrep -f "proxy.tg_ws_proxy"
-
-# Проверить, слушает ли порт
-netstat -tuln | grep 1443
 ```
 
 ### Просмотр логов
@@ -182,27 +108,7 @@ cat /var/log/tg-ws-proxy.log
 
 # Логи веб-интерфейса
 cat /tmp/tg-ws-web.log
-
-# Системные логи
-logread | grep tg-ws-proxy
 ```
-
-### Распространенные проблемы
-
-**Прокси не запускается:**
-- Проверьте, установлен ли Python: `python3 --version`
-- Проверьте наличие cryptography: `python3 -c "import cryptography"`
-- Просмотрите логи: `cat /var/log/tg-ws-proxy.log`
-
-**Веб-интерфейс недоступен:**
-- Проверьте, запущен ли веб-сервер: `ps | grep web.py`
-- Проверьте, не занят ли порт: `netstat -tuln | grep 8081`
-
-**Не удается подключиться к прокси:**
-- Убедитесь, что порт 1443 открыт в файрволе
-- Проверьте правильность ключа в файле `/opt/home/admin/proxy_secret.txt`
-- Убедитесь, что клиент использует `dd` перед секретом
-
 ## Принцип работы
 
 ```
@@ -215,13 +121,13 @@ logread | grep tg-ws-proxy
                           │
 ┌─────────────┐     ┌──────────────┐
 │   Browser   │────▶│  Web UI      │
-│   (port 8081)     │  (web.py)    │
+│   (port 8081)     │              │
 └─────────────┘     └──────────────┘
 ```
 
-1. **MTProto Proxy** (`proxy.tg_ws_proxy`) - принимает подключения от клиентов Telegram через WebSocket и перенаправляет трафик на серверы Telegram
-2. **Веб-интерфейс** (`web.py`) - простой HTTP сервер для управления прокси и отображения данных подключения
-3. **Init-скрипт** (`S99tgwsproxy`) - обеспечивает автоматический запуск сервисов при старте роутера
+1. **MTProto Proxy**  - принимает подключения от клиентов Telegram через WebSocket и перенаправляет трафик на серверы Telegram
+2. **Веб-интерфейс** - простой HTTP сервер для управления прокси и отображения данных подключения
+3. **Init-скрипт**  - обеспечивает автоматический запуск сервисов при старте роутера
 
 ## Безопасность
 
@@ -230,22 +136,10 @@ logread | grep tg-ws-proxy
 - Веб-интерфейс доступен только в локальной сети
 - При необходимости ограничьте доступ к порту 8081 в файрволе
 
-## Совместимость
-
-Тестировалось на роутерах:
--asus rt-n56u и аналоги с прошивкой Padavan
-- Устройства на архитектуре mipsel/mips
-
 ## Лицензия
 
 Проект использует [tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy) в качестве backend.
 
-## Автор
-
-save55
-
 ## Ссылки
 
-- [tg-ws-proxy (backend)](https://github.com/Flowseal/tg-ws-proxy)
-- [Entware](https://entware.net/)
-- [Padavan firmware](https://bitbucket.org/padavan/rt-n56u/wiki/RU_DescriptionOfSettings)
+[4PDA](https://bitbucket.org/padavan/rt-n56u/wiki/RU_DescriptionOfSettings)
