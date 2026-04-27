@@ -211,24 +211,18 @@ busybox_path() {
                 dir=$(dirname "$p")
                 if [ -x "$dir/busybox" ]; then
                     echo "$dir/busybox"
-            ;;
-        grep)
-            for d in /opt/bin /usr/bin /bin; do
-                if [ -x "$d/grep" ] && echo ok | "$d/grep" ok >/dev/null 2>&1; then
                     return 0
                 fi
-            done
-            echo ok | grep ok >/dev/null 2>&1 && return 0
-            ;;
-        xargs)
-            for d in /opt/bin /usr/bin /bin; do
-                if [ -x "$d/xargs" ] && echo ok | "$d/xargs" echo >/dev/null 2>&1; then
+                ;;
+            */busybox)
+                dir=$(dirname "$p")
+                if [ -x "$dir/$tgt" ]; then
+                    echo "$dir/$tgt"
                     return 0
                 fi
-            done
-            echo ok | xargs echo >/dev/null 2>&1 && return 0
-            ;;
-    esac
+                ;;
+        esac
+    done
     return 1
 }
 
