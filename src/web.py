@@ -559,9 +559,6 @@ HTML = """<!DOCTYPE html>
     </div>
 </div>
 <script>
-    let serverConfig = { host: '', port: '', secret: '' };
-    let initialLoad = true;
-
     function showToast(msg) {
         let t = document.createElement('div');
         t.className = 'toast';
@@ -580,7 +577,7 @@ HTML = """<!DOCTYPE html>
         let p = document.getElementById('editPort').value.trim();
         let s = document.getElementById('editSecret').value.trim();
         
-        let changed = (h !== serverConfig.host) || (p !== serverConfig.port) || (s !== serverConfig.secret);
+        let changed = (h !== window.serverHost) || (p !== window.serverPort) || (s !== window.serverSecret);
         document.getElementById('btnRestart').disabled = !changed;
     }
     function doRestart() {
@@ -600,12 +597,12 @@ HTML = """<!DOCTYPE html>
                 showToast('✗ ' + err.error);
                 return;
             }
+            window.serverHost = h;
+            window.serverPort = p;
+            window.serverSecret = s;
             showToast('✓ Перезапуск...');
-            serverConfig.host = h;
-            serverConfig.port = p;
-            serverConfig.secret = s;
             fetch('/restart', { method: 'POST' }).then(() => {
-                setTimeout(updateStatus, 1500);
+                updateStatusOnce();
             }).catch(() => showToast('✗'));
         }).catch(() => showToast('✗'));
     }
@@ -613,7 +610,7 @@ HTML = """<!DOCTYPE html>
         fetch('/' + action, { method: 'POST' })
             .then(() => {
                 showToast('⟳ ' + action + '...');
-                setTimeout(updateStatus, 800);
+                setTimeout(updateStatusOnce, 800);
             })
             .catch(() => showToast('✗'));
     }
@@ -625,7 +622,7 @@ HTML = """<!DOCTYPE html>
         let link = 'tg://proxy?server=' + h + '&port=' + p + '&secret=' + fs;
         document.getElementById('link').innerHTML = '<a href="' + link + '" target="_blank">' + link + '</a>';
     }
-    function updateStatus() {
+    function updateStatusOnce() {
         fetch('/status?t=' + Date.now())
             .then(r => r.json())
             .then(d => {
@@ -636,15 +633,13 @@ HTML = """<!DOCTYPE html>
                     sc.innerHTML = '<div class="status-icon"><i class="fas fa-circle pulse-icon" style="color:#28a745;"></i></div><div class="status-text">РАБОТАЕТ</div><div class="status-pid">PID: ' + d.pid + '</div>';
                     ic.style.display = 'block';
                     
-                    // Только при первой загрузке обновляем значения с сервера
-                    if (initialLoad) {
-                        serverConfig.host = d.host || '';
-                        serverConfig.port = d.port || '';
-                        serverConfig.secret = d.secret || '';
-                        document.getElementById('editHost').value = serverConfig.host;
-                        document.getElementById('editPort').value = serverConfig.port;
-                        document.getElementById('editSecret').value = serverConfig.secret;
-                        initialLoad = false;
+                    if (!window.serverHost) {
+                        window.serverHost = d.host || '';
+                        window.serverPort = d.port || '';
+                        window.serverSecret = d.secret || '';
+                        document.getElementById('editHost').value = window.serverHost;
+                        document.getElementById('editPort').value = window.serverPort;
+                        document.getElementById('editSecret').value = window.serverSecret;
                     }
                     
                     renderLink();
@@ -654,18 +649,12 @@ HTML = """<!DOCTYPE html>
                     sc.innerHTML = '<div class="status-icon"><i class="fas fa-circle" style="color:#ff3b30;"></i></div><div class="status-text">НЕ РАБОТАЕТ</div>';
                     ic.style.display = 'none';
                 }
-            })
-            .catch(() => {
-                let sc = document.getElementById('statusCard');
-                sc.className = 'status-card stopped';
-                sc.innerHTML = '<div class="status-icon"><i class="fas fa-exclamation-triangle"></i></div><div class="status-text">Ошибка</div>';
             });
     }
     document.getElementById('editHost').addEventListener('input', function() { checkChange(); renderLink(); });
     document.getElementById('editPort').addEventListener('input', function() { checkChange(); renderLink(); });
     document.getElementById('editSecret').addEventListener('input', function() { checkChange(); renderLink(); });
-    setInterval(updateStatus, 10000);
-    updateStatus();
+    updateStatusOnce();
 </script>
 </body>
 </html>"""
