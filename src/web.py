@@ -525,24 +525,20 @@ HTML = """<!DOCTYPE html>
         <h3><i class="fas fa-satellite-dish"></i> Данные для подключения</h3>
         <div class="info-row">
             <div class="info-label"><i class="fas fa-globe"></i> Хост</div>
-            <input type="text" id="editHost" class="edit-input">
-            <button class="copy-icon" onclick="copyValue('host')"><i class="fas fa-copy"></i></button>
+            <div id="host" class="info-value"></div>
         </div>
         <div class="info-row">
             <div class="info-label"><i class="fas fa-plug"></i> Порт</div>
-            <input type="text" id="editPort" class="edit-input">
-            <button class="copy-icon" onclick="copyValue('port')"><i class="fas fa-copy"></i></button>
+            <div id="port" class="info-value"></div>
         </div>
         <div class="info-row">
             <div class="info-label"><i class="fas fa-key"></i> Ключ</div>
-            <input type="text" id="editSecret" class="edit-input">
-            <button class="copy-icon" onclick="copyValue('secret')"><i class="fas fa-copy"></i></button>
+            <div id="secret" class="info-value"></div>
         </div>
         <div class="info-row">
             <div class="info-label"><i class="fas fa-link"></i> Ссылка</div>
             <div id="link" class="info-link"></div>
         </div>
-        <button id="btnRestart" class="btn-save" onclick="doRestart()" disabled><i class="fas fa-sync"></i> Перезапустить</button>
     </div>
     <div class="instruction">
         <h3><i class="fas fa-book-open"></i> Инструкция</h3>
@@ -559,103 +555,57 @@ HTML = """<!DOCTYPE html>
     </div>
 </div>
 <script>
-    function showToast(msg) {
-        let t = document.createElement('div');
-        t.className = 'toast';
-        t.textContent = msg;
-        document.body.appendChild(t);
-        setTimeout(() => t.remove(), 2500);
+    function showToast(message) {
+        let toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 2000);
     }
-    function copyValue(type) {
-        let el = document.getElementById('edit' + type.charAt(0).toUpperCase() + type.slice(1));
-        let val = el.value.trim();
-        if (type === 'secret') val = 'dd' + val;
-        navigator.clipboard.writeText(val).then(() => showToast('✓')).catch(() => showToast('✗'));
-    }
-    function checkChange() {
-        let h = document.getElementById('editHost').value.trim();
-        let p = document.getElementById('editPort').value.trim();
-        let s = document.getElementById('editSecret').value.trim();
-        
-        let changed = (h !== window.serverHost) || (p !== window.serverPort) || (s !== window.serverSecret);
-        document.getElementById('btnRestart').disabled = !changed;
-    }
-    function doRestart() {
-        let h = document.getElementById('editHost').value.trim();
-        let p = document.getElementById('editPort').value.trim();
-        let s = document.getElementById('editSecret').value.trim();
-        
-        showToast('⟳ Сохранение...');
-        
-        Promise.all([
-            fetch('/config?type=host&value=' + encodeURIComponent(h)).then(r => r.json()),
-            fetch('/config?type=port&value=' + encodeURIComponent(p)).then(r => r.json()),
-            fetch('/config?type=secret&value=' + encodeURIComponent(s)).then(r => r.json())
-        ]).then(results => {
-            let err = results.find(r => !r.ok);
-            if (err && err.error) {
-                showToast('✗ ' + err.error);
-                return;
-            }
-            window.serverHost = h;
-            window.serverPort = p;
-            window.serverSecret = s;
-            showToast('✓ Перезапуск...');
-            fetch('/restart', { method: 'POST' }).then(() => {
-                checkChange();
-                renderLink();
-            }).catch(() => showToast('✗'));
-        }).catch(() => showToast('✗'));
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            showToast('✓ Скопировано');
+        }).catch(() => showToast('✗ Ошибка'));
     }
     function sendAction(action) {
         fetch('/' + action, { method: 'POST' })
             .then(() => {
                 showToast('⟳ ' + action + '...');
-                setTimeout(updateStatusOnce, 800);
+                setTimeout(update, 800);
             })
-            .catch(() => showToast('✗'));
+            .catch(() => showToast('✗ Ошибка связи'));
     }
-    function renderLink() {
-        let s = document.getElementById('editSecret').value.trim();
-        let h = document.getElementById('editHost').value.trim();
-        let p = document.getElementById('editPort').value.trim();
-        let fs = 'dd' + s;
-        let link = 'tg://proxy?server=' + h + '&port=' + p + '&secret=' + fs;
-        document.getElementById('link').innerHTML = '<a href="' + link + '" target="_blank">' + link + '</a>';
-    }
-    function updateStatusOnce() {
+    function update() {
         fetch('/status?t=' + Date.now())
             .then(r => r.json())
             .then(d => {
-                let sc = document.getElementById('statusCard');
-                let ic = document.getElementById('infoCard');
+                const statusCard = document.getElementById('statusCard');
+                const infoCard = document.getElementById('infoCard');
+
                 if (d.running) {
-                    sc.className = 'status-card running';
-                    sc.innerHTML = '<div class="status-icon"><i class="fas fa-circle pulse-icon" style="color:#28a745;"></i></div><div class="status-text">РАБОТАЕТ</div><div class="status-pid">PID: ' + d.pid + '</div>';
-                    ic.style.display = 'block';
-                    
-                    if (!window.serverHost) {
-                        window.serverHost = d.host || '';
-                        window.serverPort = d.port || '';
-                        window.serverSecret = d.secret || '';
-                        document.getElementById('editHost').value = window.serverHost;
-                        document.getElementById('editPort').value = window.serverPort;
-                        document.getElementById('editSecret').value = window.serverSecret;
-                    }
-                    
-                    renderLink();
-                    checkChange();
+                    statusCard.className = 'status-card running';
+                    statusCard.innerHTML = '<div class="status-icon"><i class="fas fa-circle pulse-icon" style="color:#28a745;"></i></div><div class="status-text">РАБОТАЕТ</div><div class="status-pid">PID: ' + d.pid + '</div>';
+                    infoCard.style.display = 'block';
+                    const fullSecret = 'dd' + d.secret;
+                    const link = 'tg://proxy?server=' + d.host + '&port=' + d.port + '&secret=' + fullSecret;
+                    document.getElementById('host').innerHTML = '<span>' + d.host + '</span><button class="copy-icon" onclick="copyToClipboard(\'' + d.host + '\')"><i class="fas fa-copy"></i></button>';
+                    document.getElementById('port').innerHTML = '<span>' + d.port + '</span><button class="copy-icon" onclick="copyToClipboard(\'' + d.port + '\')"><i class="fas fa-copy"></i></button>';
+                    document.getElementById('secret').innerHTML = '<span>' + fullSecret + '</span><button class="copy-icon" onclick="copyToClipboard(\'' + fullSecret + '\')"><i class="fas fa-copy"></i></button>';
+                    document.getElementById('link').innerHTML = '<a href="' + link + '" target="_blank">' + link + '</a>';
                 } else {
-                    sc.className = 'status-card stopped';
-                    sc.innerHTML = '<div class="status-icon"><i class="fas fa-circle" style="color:#ff3b30;"></i></div><div class="status-text">НЕ РАБОТАЕТ</div>';
-                    ic.style.display = 'none';
+                    statusCard.className = 'status-card stopped';
+                    statusCard.innerHTML = '<div class="status-icon"><i class="fas fa-circle" style="color:#ff3b30;"></i></div><div class="status-text">НЕ РАБОТАЕТ</div>';
+                    infoCard.style.display = 'none';
                 }
+            })
+            .catch(() => {
+                const statusCard = document.getElementById('statusCard');
+                statusCard.className = 'status-card stopped';
+                statusCard.innerHTML = '<div class="status-icon"><i class="fas fa-exclamation-triangle"></i></div><div class="status-text">Ошибка</div>';
             });
     }
-    document.getElementById('editHost').addEventListener('input', function() { checkChange(); renderLink(); });
-    document.getElementById('editPort').addEventListener('input', function() { checkChange(); renderLink(); });
-    document.getElementById('editSecret').addEventListener('input', function() { checkChange(); renderLink(); });
-    updateStatusOnce();
+    setInterval(update, 5000);
+    update();
 </script>
 </body>
 </html>"""
