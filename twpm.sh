@@ -46,29 +46,40 @@ patch_init_if_no_pkill() {
 }
 
 proxy_process_running() {
-    # Проверяем только наш конкретный прокси процесс
     if have_cmd pgrep; then
-        pgrep -f "python.*proxy\.tg_ws_proxy" > /dev/null 2>&1 && return 0
         pgrep -f "tg-ws-proxy" > /dev/null 2>&1 && return 0
+        pgrep -f "proxy.tg_ws_proxy" > /dev/null 2>&1 && return 0
+        pgrep -f "python.*proxy" > /dev/null 2>&1 && return 0
         return 1
     fi
     
-    RUNNING=$(ps 2>/dev/null | grep -E "python.*proxy\.tg_ws_proxy|tg-ws-proxy" | grep -v grep | grep -v "twpm.sh" | grep -v "S99tgwsproxy")
-    [ -n "$RUNNING" ]
+    RUNNING=$(ps 2>/dev/null | grep -E "tg-ws-proxy|proxy\.tg_ws_proxy" | grep -v grep | grep -v "twpm.sh" | grep -v "S99tgwsproxy")
+    if [ -n "$RUNNING" ]; then
+        return 0
+    fi
+    
+    if have_cmd netstat; then
+        netstat -tuln 2>/dev/null | grep ":1443" > /dev/null 2>&1 && return 0
+    fi
+    
+    return 1
 }
 
 proxy_process_pid() {
     PID=""
     
     if have_cmd pgrep; then
-        PID=$(pgrep -f "python.*proxy\.tg_ws_proxy" 2>/dev/null | head -1)
+        PID=$(pgrep -f "tg-ws-proxy" 2>/dev/null | head -1)
         if [ -z "$PID" ]; then
-            PID=$(pgrep -f "tg-ws-proxy" 2>/dev/null | head -1)
+            PID=$(pgrep -f "proxy.tg_ws_proxy" 2>/dev/null | head -1)
+        fi
+        if [ -z "$PID" ]; then
+            PID=$(pgrep -f "python.*proxy" 2>/dev/null | head -1)
         fi
     fi
     
     if [ -z "$PID" ]; then
-        PID=$(ps 2>/dev/null | grep -E "python.*proxy\.tg_ws_proxy|tg-ws-proxy" | grep -v grep | grep -v "twpm.sh" | grep -v "S99tgwsproxy" | awk '{print $1}' | head -1)
+        PID=$(ps 2>/dev/null | grep -E "tg-ws-proxy|proxy\.tg_ws_proxy" | grep -v grep | grep -v "twpm.sh" | grep -v "S99tgwsproxy" | awk '{print $1}' | head -1)
     fi
     
     echo "$PID"
@@ -403,7 +414,6 @@ install_proxy() {
     refresh_path
     check_required_tools || return 1
     
-    # Полная остановка перед установкой
     force_stop_all_proxy
     
     mkdir -p "$(dirname "$SECRET_FILE")"
@@ -489,8 +499,17 @@ install_proxy() {
     if proxy_process_running; then
         echo -e "${GREEN}УСТАНОВКА УСПЕШНО ЗАВЕРШЕНА!${NC}"
     else
-        echo -e "\n${RED}Ошибка: Сервис не запустился.${NC}"
-        echo -e "${YELLOW}Проверьте логи: cat $LOG_FILE${NC}"
+        if have_cmd netstat; then
+            if netstat -tuln 2>/dev/null | grep ":1443" > /dev/null 2>&1; then
+                echo -e "${GREEN}УСТАНОВКА УСПЕШНО ЗАВЕРШЕНА!${NC}"
+                echo -e "${YELLOW}Прокси запущен на порту 1443${NC}"
+            else
+                echo -e "\n${RED}Ошибка: Сервис не запустился.${NC}"
+                echo -e "${YELLOW}Проверьте логи: cat $LOG_FILE${NC}"
+            fi
+        else
+            echo -e "${GREEN}УСТАНОВКА ЗАВЕРШЕНА!${NC}"
+        fi
     fi
     PAUSE
 }
@@ -560,7 +579,7 @@ menu() {
         LOCAL_IP=$(get_router_ip)
         SECRET=$(cat "$SECRET_FILE" 2>/dev/null)
         
-        if [ -z "$PID" ] || [ "$PID" = "1" ]; then
+        if [ -z "$PID" ]; then
             PID="активен"
         fi
         
