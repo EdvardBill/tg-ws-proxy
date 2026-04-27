@@ -55,22 +55,36 @@ proxy_process_running() {
 }
 
 proxy_process_pid() {
-    # Ищем PID процесса proxy.tg_ws_proxy
     PID=""
     
-    # Способ 1: через pgrep
+    # Способ 1: через pgrep (самый надежный)
     if have_cmd pgrep; then
         PID=$(pgrep -f "proxy.tg_ws_proxy" 2>/dev/null | head -1)
     fi
     
-    # Способ 2: через ps (если pgrep не сработал)
+    # Способ 2: через ps с разными опциями
     if [ -z "$PID" ]; then
-        PID=$(ps 2>/dev/null | grep -E "proxy\.tg_ws_proxy|tg-ws-proxy" | grep -v grep | awk '{print $1}' | head -1)
+        # Пробуем разные варианты ps
+        for ps_cmd in "ps w" "ps aux" "ps -ef" "ps"; do
+            PID=$($ps_cmd 2>/dev/null | grep -E "python.*proxy\.tg_ws_proxy|proxy\.tg_ws_proxy" | grep -v grep | awk '{print $1}' | head -1)
+            [ -n "$PID" ] && break
+        done
     fi
     
-    # Способ 3: поиск процесса через ps с полным форматом
-    if [ -z "$PID" ]; then
-        PID=$(ps w 2>/dev/null | grep -E "proxy\.tg_ws_proxy" | grep -v grep | awk '{print $1}' | head -1)
+    # Способ 3: поиск через /proc
+    if [ -z "$PID" ] && [ -d "/proc" ]; then
+        for pid in /proc/[0-9]*; do
+            [ -f "$pid/cmdline" ] || continue
+            if grep -q "proxy.tg_ws_proxy" "$pid/cmdline" 2>/dev/null; then
+                PID=$(basename "$pid")
+                break
+            fi
+        done
+    fi
+    
+    # Способ 4: через pidof
+    if [ -z "$PID" ] && have_cmd pidof; then
+        PID=$(pidof "proxy.tg_ws_proxy" 2>/dev/null)
     fi
     
     echo "$PID"
@@ -595,11 +609,17 @@ menu() {
         LOCAL_IP=$(get_router_ip)
         SECRET=$(cat "$SECRET_FILE" 2>/dev/null)
         
-        if [ -n "$PID" ]; then
-            echo -e "\n${YELLOW}Статус: ${GREEN}● ЗАПУЩЕН${NC} (PID: ${PID})"
-        else
-            echo -e "\n${YELLOW}Статус: ${GREEN}● ЗАПУЩЕН${NC}"
+        # Если PID не найден, но процесс запущен - пробуем найти любым способом
+        if [ -z "$PID" ]; then
+            # Последняя попытка - ищем через ps с максимально широким форматом
+            PID=$(ps ww 2>/dev/null | grep -E "python.*proxy|tg-ws-proxy" | grep -v grep | awk '{print $1}' | head -1)
         fi
+        
+        if [ -z "$PID" ]; then
+            PID="не удалось определить"
+        fi
+        
+        echo -e "\n${YELLOW}Статус: ${GREEN}● ЗАПУЩЕН${NC} (PID: ${PID})"
         
         echo -e "\n${CYAN}  Веб-интерфейс:${NC} http://$LOCAL_IP:8081"
         echo -e "\n${CYAN}  Хост:${NC} $LOCAL_IP"
