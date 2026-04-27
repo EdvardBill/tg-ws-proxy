@@ -63,51 +63,32 @@ proxy_process_pid() {
 }
 
 monitor_system() {
-
     CPU_USAGE="N/A"
-    if [ -f /proc/stat ]; then
-        read _ user nice system idle iowait irq softirq steal < /proc/stat 2>/dev/null
-        if [ -n "$idle" ] && [ -n "$user" ] && [ -n "$nice" ] && [ -n "$system" ] && \
-           [ -n "$iowait" ] && [ -n "$irq" ] && [ -n "$softirq" ] && [ -n "$steal" ]; then
-            idle1=$idle
-            total1=$((user + nice + system + idle + iowait + irq + softirq + steal))
-            sleep 0.5
-            read _ user nice system idle iowait irq softirq steal < /proc/stat 2>/dev/null
-            if [ -n "$idle" ] && [ -n "$user" ] && [ -n "$nice" ] && [ -n "$system" ] && \
-               [ -n "$iowait" ] && [ -n "$irq" ] && [ -n "$softirq" ] && [ -n "$steal" ]; then
-                idle2=$idle
-                total2=$((user + nice + system + idle + iowait + irq + softirq + steal))
-                idle_diff=$((idle2 - idle1))
-                total_diff=$((total2 - total1))
-                if [ "$total_diff" -gt 0 ] 2>/dev/null; then
-                    cpu_used=$((100 * (total_diff - idle_diff) / total_diff))
-                    CPU_USAGE="$cpu_used"
-                fi
+    MEM_USAGE="N/A"
+    
+    # CPU через top
+    if have_cmd top; then
+        CPU_LINE=$(top -bn1 2>/dev/null | grep -m1 "CPU:")
+        if [ -n "$CPU_LINE" ]; then
+            CPU_IDLE=$(echo "$CPU_LINE" | awk '{print $8}')
+            if [ -n "$CPU_IDLE" ] && [ "$CPU_IDLE" != "%" ]; then
+                CPU_USAGE=$(awk "BEGIN {printf \"%.0f\", 100 - $CPU_IDLE}" 2>/dev/null)
+                [ -z "$CPU_USAGE" ] && CPU_USAGE="N/A"
             fi
         fi
     fi
-    if [ "$CPU_USAGE" = "N/A" ] && have_cmd top; then
-        CPU_RAW=$(top -bn1 2>/dev/null | grep -m1 "CPU:" | awk '{print $8}')
-        if [ -n "$CPU_RAW" ]; then
-            CPU_USAGE=$(awk "BEGIN {printf \"%.0f\", 100 - $CPU_RAW}")
-        fi
-    fi
-    MEM_USAGE="N/A"
+    
+    # Memory
     if [ -f /proc/meminfo ]; then
-        MEM_TOTAL=$(grep -m1 MemTotal /proc/meminfo | awk '{print $2}')
-        MEM_FREE=$(grep -m1 MemFree /proc/meminfo | awk '{print $2}')
-        MEM_BUFFERS=$(grep -m1 Buffers /proc/meminfo | awk '{print $2}')
-        MEM_CACHED=$(grep -m1 Cached /proc/meminfo | awk '{print $2}')
-        if [ -n "$MEM_TOTAL" ] && [ "$MEM_TOTAL" -gt 0 ] 2>/dev/null; then
-        
-            MEM_USAGE=$(awk -v total="$MEM_TOTAL" -v free="$MEM_FREE" -v buffers="$MEM_BUFFERS" -v cached="$MEM_CACHED" 'BEGIN { used = total - free - buffers - cached; printf "%.1f", used * 100 / total }' 2>/dev/null)
-            [ -z "$MEM_USAGE" ] && MEM_USAGE="N/A"
-        fi
+        MEM_USAGE=$(awk '/MemTotal/ {total=$2} /MemFree/ {free=$2} /Buffers/ {buf=$2} /Cached/ {cach=$2} END {if(total>0) printf "%.1f", (total-free-buf-cach)*100/total}' /proc/meminfo 2>/dev/null)
+        [ -z "$MEM_USAGE" ] && MEM_USAGE="N/A"
     fi
+    
     if [ "$MEM_USAGE" = "N/A" ] && have_cmd free; then
-        MEM_RAW=$(free 2>/dev/null | grep -m1 Mem | awk '{if($2>0) printf "%.1f", $3/$2 * 100}')
-        [ -n "$MEM_RAW" ] && MEM_USAGE="$MEM_RAW"
+        MEM_USAGE=$(free 2>/dev/null | awk '/^Mem/ {if($2>0) printf "%.1f", $3/$2*100}')
+        [ -z "$MEM_USAGE" ] && MEM_USAGE="N/A"
     fi
+
     echo -e "${CYAN}Система: CPU ${CPU_USAGE}% | MEM ${MEM_USAGE}%${NC}"
 }
 
@@ -632,8 +613,12 @@ menu() {
         echo -e "\n${CYAN}  Веб-интерфейс:${NC} http://$LOCAL_IP:8081"
         echo -e "\n${CYAN}  Хост:${NC} $LOCAL_IP"
         echo -e "${CYAN}  Порт:${NC} 1443"
-        echo -e "${CYAN}  Ключ:${NC} dd$SECRET"
-        echo -e "\n${CYAN}  Ссылка:${NC} tg://proxy?server=$LOCAL_IP&port=1443&secret=dd$SECRET"
+        if [ -n "$SECRET" ]; then
+            echo -e "${CYAN}  Ключ:${NC} dd$SECRET"
+            echo -e "\n${CYAN}  Ссылка:${NC} tg://proxy?server=$LOCAL_IP&port=1443&secret=dd$SECRET"
+        else
+            echo -e "${RED}  Ошибка: секрет не найден!${NC}"
+        fi
     else
         echo -e "\n${YELLOW}Статус: ${RED}○ НЕ ЗАПУЩЕН${NC}"
     fi
