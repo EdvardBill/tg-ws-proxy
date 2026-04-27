@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import sys
+import urllib.parse
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 INIT_SCRIPT = "/opt/etc/init.d/S99tgwsproxy"
@@ -335,6 +336,18 @@ HTML = """<!DOCTYPE html>
             outline: none;
         }
         .edit-input:focus { border-color: #ffc107; }
+        .info-row .edit-input {
+            font-family: 'SF Mono', 'Courier New', monospace;
+            font-size: 12px;
+            background: #080808;
+            padding: 6px 10px;
+            border-radius: 10px;
+            border: 1px solid #1f1f1f;
+            color: #e0e0e0;
+            outline: none;
+            min-width: 100px;
+        }
+        .info-row .edit-input:focus { border-color: #28a745; }
         .settings-card {
             background: #0f0f0f;
             border: 1px solid #2a2a2a;
@@ -508,37 +521,24 @@ HTML = """<!DOCTYPE html>
         <h3><i class="fas fa-satellite-dish"></i> Данные для подключения</h3>
         <div class="info-row">
             <div class="info-label"><i class="fas fa-globe"></i> Хост</div>
-            <div id="host" class="info-value"></div>
+            <input type="text" id="editHost" class="edit-input" onchange="checkChange()">
+            <button class="copy-icon" onclick="copyValue('host')"><i class="fas fa-copy"></i></button>
         </div>
         <div class="info-row">
             <div class="info-label"><i class="fas fa-plug"></i> Порт</div>
-            <div id="port" class="info-value"></div>
+            <input type="text" id="editPort" class="edit-input" onchange="checkChange()">
+            <button class="copy-icon" onclick="copyValue('port')"><i class="fas fa-copy"></i></button>
         </div>
         <div class="info-row">
             <div class="info-label"><i class="fas fa-key"></i> Ключ</div>
-            <div id="secret" class="info-value"></div>
+            <input type="text" id="editSecret" class="edit-input" onchange="checkChange()">
+            <button class="copy-icon" onclick="copyValue('secret')"><i class="fas fa-copy"></i></button>
         </div>
         <div class="info-row">
             <div class="info-label"><i class="fas fa-link"></i> Ссылка</div>
             <div id="link" class="info-link"></div>
         </div>
-        <h3 style="margin-top: 16px;"><i class="fas fa-edit"></i> Редактирование</h3>
-        <div class="info-row">
-            <div class="info-label"><i class="fas fa-globe"></i> Хост</div>
-            <input type="text" id="editHost" class="edit-input" placeholder="IP адрес">
-            <button class="edit-icon" onclick="saveSetting('host')"><i class="fas fa-save"></i></button>
-        </div>
-        <div class="info-row">
-            <div class="info-label"><i class="fas fa-plug"></i> Порт</div>
-            <input type="number" id="editPort" class="edit-input" placeholder="1443">
-            <button class="edit-icon" onclick="saveSetting('port')"><i class="fas fa-save"></i></button>
-        </div>
-        <div class="info-row">
-            <div class="info-label"><i class="fas fa-key"></i> Ключ</div>
-            <input type="text" id="editSecret" class="edit-input" placeholder="секретный ключ (32 символа)">
-            <button class="edit-icon" onclick="saveSetting('secret')"><i class="fas fa-save"></i></button>
-        </div>
-        <button id="btnRestart" class="btn-save" onclick="restartWithNewConfig()" disabled style="margin-top: 16px;"><i class="fas fa-sync"></i> Сохранить и перезапустить</button>
+        <button id="btnRestart" class="btn-save" onclick="doRestart()" disabled><i class="fas fa-sync"></i> Перезапустить</button>
     </div>
     <div class="instruction">
         <h3><i class="fas fa-book-open"></i> Инструкция</h3>
@@ -555,105 +555,94 @@ HTML = """<!DOCTYPE html>
     </div>
 </div>
 <script>
-    let currentConfig = { host: '', port: '', secret: '' };
-    let pendingChanges = false;
+    let originalConfig = { host: '', port: '', secret: '' };
+    let hasChanges = false;
 
-    function showToast(message) {
-        let toast = document.createElement('div');
-        toast.className = 'toast';
-        toast.textContent = message;
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 2000);
+    function showToast(msg) {
+        let t = document.createElement('div');
+        t.className = 'toast';
+        t.textContent = msg;
+        document.body.appendChild(t);
+        setTimeout(() => t.remove(), 2000);
     }
-    function copyToClipboard(text) {
-        navigator.clipboard.writeText(text).then(() => {
-            showToast('✓ Скопировано');
-        }).catch(() => showToast('✗ Ошибка'));
+    function copyValue(type) {
+        let el = document.getElementById('edit' + type.charAt(0).toUpperCase() + type.slice(1));
+        let val = el.value.trim();
+        if (type === 'secret') val = 'dd' + val;
+        navigator.clipboard.writeText(val).then(() => showToast('✓')).catch(() => showToast('✗'));
+    }
+    function checkChange() {
+        let h = document.getElementById('editHost').value.trim();
+        let p = document.getElementById('editPort').value.trim();
+        let s = document.getElementById('editSecret').value.trim();
+        hasChanges = (h !== originalConfig.host) || (p !== originalConfig.port) || (s !== originalConfig.secret);
+        document.getElementById('btnRestart').disabled = !hasChanges;
+    }
+    function doRestart() {
+        let h = document.getElementById('editHost').value.trim();
+        let p = document.getElementById('editPort').value.trim();
+        let s = document.getElementById('editSecret').value.trim();
+        
+        showToast('⟳ Сохранение...');
+        
+        Promise.all([
+            h !== originalConfig.host ? fetch('/config?type=host&value=' + encodeURIComponent(h)).then(r => r.json()) : Promise.resolve({ok:true}),
+            p !== originalConfig.port ? fetch('/config?type=port&value=' + encodeURIComponent(p)).then(r => r.json()) : Promise.resolve({ok:true}),
+            s !== originalConfig.secret ? fetch('/config?type=secret&value=' + encodeURIComponent(s)).then(r => r.json()) : Promise.resolve({ok:true})
+        ]).then(results => {
+            let err = results.find(r => !r.ok);
+            if (err && err.error) {
+                showToast('✗ ' + err.error);
+                return;
+            }
+            showToast('✓ Перезапуск...');
+            fetch('/restart', { method: 'POST' }).then(() => setTimeout(update, 800)).catch(() => showToast('✗'));
+        }).catch(() => showToast('✗'));
     }
     function sendAction(action) {
-        fetch('/' + action)
+        fetch('/' + action, { method: 'POST' })
             .then(() => {
                 showToast('⟳ ' + action + '...');
-                setTimeout(update, 600);
+                setTimeout(update, 800);
             })
-            .catch(() => showToast('✗ Ошибка связи'));
-    }
-    function checkPendingChanges() {
-        const h = document.getElementById('editHost').value.trim();
-        const p = document.getElementById('editPort').value.trim();
-        const s = document.getElementById('editSecret').value.trim();
-        pendingChanges = (h !== currentConfig.host) || (p !== currentConfig.port) || (s !== currentConfig.secret);
-        document.getElementById('btnRestart').disabled = !pendingChanges;
-    }
-    function saveSetting(type) {
-        const input = document.getElementById('edit' + type.charAt(0).toUpperCase() + type.slice(1));
-        const value = input.value.trim();
-        fetch('/config?' + new URLSearchParams({ action: 'save', type: type, value: value }))
-            .then(r => r.json())
-            .then(d => {
-                if (d.ok) {
-                    showToast('✓ Сохранено');
-                    checkPendingChanges();
-                } else {
-                    showToast('✗ Ошибка: ' + (d.error || 'unknown'));
-                }
-            })
-            .catch(() => showToast('✗ Ошибка связи'));
-    }
-    function restartWithNewConfig() {
-        sendAction('restart');
+            .catch(() => showToast('✗'));
     }
     function update() {
         fetch('/status?t=' + Date.now())
             .then(r => r.json())
             .then(d => {
-                const statusCard = document.getElementById('statusCard');
-                const infoCard = document.getElementById('infoCard');
-
-                currentConfig.host = d.host || '';
-                currentConfig.port = d.port || '';
-                currentConfig.secret = d.secret || '';
-
-                document.getElementById('editHost').value = currentConfig.host;
-                document.getElementById('editPort').value = currentConfig.port;
-                document.getElementById('editSecret').value = currentConfig.secret;
-                checkPendingChanges();
-
+                let sc = document.getElementById('statusCard');
+                let ic = document.getElementById('infoCard');
                 if (d.running) {
-                    statusCard.className = 'status-card running';
-                    statusCard.innerHTML = `
-                        <div class="status-icon"><i class="fas fa-circle pulse-icon" style="color: #28a745;"></i></div>
-                        <div class="status-text">РАБОТАЕТ</div>
-                        <div class="status-pid">PID: ${d.pid}</div>
-                    `;
-                    infoCard.style.display = 'block';
-                    const fullSecret = 'dd' + d.secret;
-                    const link = `tg://proxy?server=${d.host}&port=${d.port}&secret=${fullSecret}`;
-                    document.getElementById('host').innerHTML = `<span>${d.host}</span><button class="copy-icon" onclick="copyToClipboard('${d.host}')"><i class="fas fa-copy"></i></button>`;
-                    document.getElementById('port').innerHTML = `<span>${d.port}</span><button class="copy-icon" onclick="copyToClipboard('${d.port}')"><i class="fas fa-copy"></i></button>`;
-                    document.getElementById('secret').innerHTML = `<span>${fullSecret}</span><button class="copy-icon" onclick="copyToClipboard('${fullSecret}')"><i class="fas fa-copy"></i></button>`;
-                    document.getElementById('link').innerHTML = `<a href="${link}" target="_blank">${link}</a>`;
+                    sc.className = 'status-card running';
+                    sc.innerHTML = '<div class="status-icon"><i class="fas fa-circle pulse-icon" style="color:#28a745;"></i></div><div class="status-text">РАБОТАЕТ</div><div class="status-pid">PID: ' + d.pid + '</div>';
+                    ic.style.display = 'block';
+                    originalConfig.host = d.host || '';
+                    originalConfig.port = d.port || '';
+                    originalConfig.secret = d.secret || '';
+                    document.getElementById('editHost').value = originalConfig.host;
+                    document.getElementById('editPort').value = originalConfig.port;
+                    document.getElementById('editSecret').value = originalConfig.secret;
+                    let fs = 'dd' + originalConfig.secret;
+                    let link = 'tg://proxy?server=' + originalConfig.host + '&port=' + originalConfig.port + '&secret=' + fs;
+                    document.getElementById('link').innerHTML = '<a href="' + link + '" target="_blank">' + link + '</a>';
+                    checkChange();
                 } else {
-                    statusCard.className = 'status-card stopped';
-                    statusCard.innerHTML = `
-                        <div class="status-icon"><i class="fas fa-circle" style="color: #ff3b30;"></i></div>
-                        <div class="status-text">НЕ РАБОТАЕТ</div>
-                        <div class="status-pid"></div>
-                    `;
-                    infoCard.style.display = 'none';
+                    sc.className = 'status-card stopped';
+                    sc.innerHTML = '<div class="status-icon"><i class="fas fa-circle" style="color:#ff3b30;"></i></div><div class="status-text">НЕ РАБОТАЕТ</div>';
+                    ic.style.display = 'none';
                 }
             })
             .catch(() => {
-                const statusCard = document.getElementById('statusCard');
-                statusCard.className = 'status-card stopped';
-                statusCard.innerHTML = `
-                    <div class="status-icon"><i class="fas fa-exclamation-triangle"></i></div>
-                    <div class="status-text">Ошибка</div>
-                    <div class="status-pid"></div>
-                `;
+                let sc = document.getElementById('statusCard');
+                sc.className = 'status-card stopped';
+                sc.innerHTML = '<div class="status-icon"><i class="fas fa-exclamation-triangle"></i></div><div class="status-text">Ошибка</div>';
             });
     }
-    setInterval(update, 3000);
+    document.getElementById('editHost').addEventListener('input', checkChange);
+    document.getElementById('editPort').addEventListener('input', checkChange);
+    document.getElementById('editSecret').addEventListener('input', checkChange);
+    setInterval(update, 5000);
     update();
 </script>
 </body>
@@ -680,21 +669,26 @@ class H(BaseHTTPRequestHandler):
             self.end_headers()
             pid = find_proxy_pid()
             if pid:
-                ip = get_lan_ip()
                 sec = ""
                 port = "1443"
+                host = ""
                 if os.path.exists(SECRET_FILE):
                     with open(SECRET_FILE, encoding="utf-8", errors="ignore") as f:
                         sec = f.read().strip()
                 if os.path.exists(PORT_FILE):
                     with open(PORT_FILE, encoding="utf-8", errors="ignore") as f:
                         port = f.read().strip() or "1443"
+                if os.path.exists(HOST_FILE):
+                    with open(HOST_FILE, encoding="utf-8", errors="ignore") as f:
+                        host = f.read().strip()
+                if not host:
+                    host = get_lan_ip()
                 self.wfile.write(
                     json.dumps(
                         {
                             "running": 1,
                             "pid": pid,
-                            "host": ip,
+                            "host": host,
                             "port": port,
                             "secret": sec,
                         }
@@ -704,61 +698,67 @@ class H(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({"running": 0}).encode())
             return
             
-        if path.startswith("/config?"):
-            import urllib.parse
-            query = urllib.parse.parse_qs(urllib.parse.urlparse(path).query)
-            action = query.get("action", [None])[0]
-            if action == "save":
-                type_ = query.get("type", [None])[0]
-                value = query.get("value", [""])[0]
-                ok = False
-                error = "unknown"
-                if type_ == "secret":
-                    if len(value) == 32 and all(c in "0123456789abcdef" for c in value.lower()):
-                        try:
-                            with open(SECRET_FILE, "w", encoding="utf-8") as f:
-                                f.write(value.lower())
-                            ok = True
-                        except OSError as e:
-                            error = str(e)
-                    else:
-                        error = "Неверный формат (32 hex символа)"
-                elif type_ == "port":
+        if path.startswith("/config") or path.startswith("/save"):
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            qs = ""
+            if "?" in path:
+                qs = path.split("?", 1)[1]
+            params = {}
+            for pair in qs.split("&"):
+                if "=" in pair:
+                    k, v = pair.split("=", 1)
+                    params[k] = urllib.parse.unquote(v)
+            type_ = params.get("type", "")
+            value = params.get("value", "")
+            ok = False
+            error = ""
+            if type_ == "secret":
+                if len(value) == 32 and all(c in "0123456789abcdef" for c in value.lower()):
                     try:
-                        p = int(value)
-                        if 1 <= p <= 65535:
-                            with open(PORT_FILE, "w", encoding="utf-8") as f:
-                                f.write(str(p))
-                            ok = True
-                        else:
-                            error = "Порт должен быть 1-65535"
-                    except ValueError:
-                        error = "Неверный номер порта"
-                elif type_ == "host":
-                    import re
-                    if re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", value):
-                        with open(HOST_FILE, "w", encoding="utf-8") as f:
-                            f.write(value)
+                        with open(SECRET_FILE, "w", encoding="utf-8") as f:
+                            f.write(value.lower())
+                        ok = True
+                    except OSError as e:
+                        error = str(e)
+                else:
+                    error = "Неверный формат (32 hex)"
+            elif type_ == "port":
+                try:
+                    p = int(value)
+                    if 1 <= p <= 65535:
+                        with open(PORT_FILE, "w", encoding="utf-8") as f:
+                            f.write(str(p))
                         ok = True
                     else:
-                        error = "Неверный IP адрес"
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.end_headers()
-                self.wfile.write(json.dumps({"ok": ok, "error": error}).encode())
-                return
+                        error = "Порт 1-65535"
+                except ValueError:
+                    error = "Неверный порт"
+            elif type_ == "host":
+                import re
+                if re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", value):
+                    with open(HOST_FILE, "w", encoding="utf-8") as f:
+                        f.write(value)
+                    ok = True
+                else:
+                    error = "Неверный IP"
+            self.wfile.write(json.dumps({"ok": ok, "error": error}).encode())
+            return
             
         if path in ("/start", "/stop", "/restart"):
             action = path.lstrip("/")
             run_init(action)
-            self.send_response(302)
-            self.send_header("Location", "/")
-            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
             self.end_headers()
             return
 
         self.send_response(404)
         self.end_headers()
+
+    def do_POST(self):
+        self.do_GET()
 
     def log_message(self, *_args):
         pass
