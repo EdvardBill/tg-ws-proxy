@@ -55,41 +55,25 @@ proxy_process_running() {
 }
 
 proxy_process_pid() {
+    # Ищем PID процесса proxy.tg_ws_proxy
+    PID=""
+    
+    # Способ 1: через pgrep
     if have_cmd pgrep; then
-        pgrep -f "proxy.tg_ws_proxy" | head -1
-        return
-    fi
-    ps | grep "proxy.tg_ws_proxy" | grep -v grep | awk '{print $1}' | head -1
-}
-
-monitor_system() {
-    CPU_USAGE="N/A"
-    MEM_USAGE="N/A"
-    
-    # CPU через top
-    if have_cmd top; then
-        CPU_LINE=$(top -bn1 2>/dev/null | grep -m1 "CPU:")
-        if [ -n "$CPU_LINE" ]; then
-            CPU_IDLE=$(echo "$CPU_LINE" | awk '{print $8}')
-            if [ -n "$CPU_IDLE" ] && [ "$CPU_IDLE" != "%" ]; then
-                CPU_USAGE=$(awk "BEGIN {printf \"%.0f\", 100 - $CPU_IDLE}" 2>/dev/null)
-                [ -z "$CPU_USAGE" ] && CPU_USAGE="N/A"
-            fi
-        fi
+        PID=$(pgrep -f "proxy.tg_ws_proxy" 2>/dev/null | head -1)
     fi
     
-    # Memory
-    if [ -f /proc/meminfo ]; then
-        MEM_USAGE=$(awk '/MemTotal/ {total=$2} /MemFree/ {free=$2} /Buffers/ {buf=$2} /Cached/ {cach=$2} END {if(total>0) printf "%.1f", (total-free-buf-cach)*100/total}' /proc/meminfo 2>/dev/null)
-        [ -z "$MEM_USAGE" ] && MEM_USAGE="N/A"
+    # Способ 2: через ps (если pgrep не сработал)
+    if [ -z "$PID" ]; then
+        PID=$(ps 2>/dev/null | grep -E "proxy\.tg_ws_proxy|tg-ws-proxy" | grep -v grep | awk '{print $1}' | head -1)
     fi
     
-    if [ "$MEM_USAGE" = "N/A" ] && have_cmd free; then
-        MEM_USAGE=$(free 2>/dev/null | awk '/^Mem/ {if($2>0) printf "%.1f", $3/$2*100}')
-        [ -z "$MEM_USAGE" ] && MEM_USAGE="N/A"
+    # Способ 3: поиск процесса через ps с полным форматом
+    if [ -z "$PID" ]; then
+        PID=$(ps w 2>/dev/null | grep -E "proxy\.tg_ws_proxy" | grep -v grep | awk '{print $1}' | head -1)
     fi
-
-    echo -e "${CYAN}Система: CPU ${CPU_USAGE}% | MEM ${MEM_USAGE}%${NC}"
+    
+    echo "$PID"
 }
 
 if [ -d "/opt/home/admin" ]; then
@@ -605,14 +589,22 @@ menu() {
     echo -e "${RED} / / / (_ /  | |/ |/ /\ \  / ___/ __/ _ \\\\ \ / // /${NC}"
     echo -e "${RED}/_/  \___/   |__/|__/___/ /_/  /_/  \___/_\_\\_, / ${NC}"
     echo -e "${RED}                                            /___/  ${NC}"
+    
     if proxy_process_running; then
         PID=$(proxy_process_pid)
         LOCAL_IP=$(get_router_ip)
         SECRET=$(cat "$SECRET_FILE" 2>/dev/null)
-        echo -e "\n${YELLOW}Статус: ${GREEN}● ЗАПУЩЕН${NC} (PID:${PID})"
+        
+        if [ -n "$PID" ]; then
+            echo -e "\n${YELLOW}Статус: ${GREEN}● ЗАПУЩЕН${NC} (PID: ${PID})"
+        else
+            echo -e "\n${YELLOW}Статус: ${GREEN}● ЗАПУЩЕН${NC}"
+        fi
+        
         echo -e "\n${CYAN}  Веб-интерфейс:${NC} http://$LOCAL_IP:8081"
         echo -e "\n${CYAN}  Хост:${NC} $LOCAL_IP"
         echo -e "${CYAN}  Порт:${NC} 1443"
+        
         if [ -n "$SECRET" ]; then
             echo -e "${CYAN}  Ключ:${NC} dd$SECRET"
             echo -e "\n${CYAN}  Ссылка:${NC} tg://proxy?server=$LOCAL_IP&port=1443&secret=dd$SECRET"
@@ -622,13 +614,14 @@ menu() {
     else
         echo -e "\n${YELLOW}Статус: ${RED}○ НЕ ЗАПУЩЕН${NC}"
     fi
-    monitor_system
+    
     echo -e "\n${GREEN}1) Установить${NC}"
     echo -e "${GREEN}2) Удалить${NC}"
     echo -e "${GREEN}3) Перезапустить${NC}"
     echo -e "${GREEN}0) Выход${NC}"
     echo -en "\n${YELLOW}Выберите пункт [0-3]: ${NC}"
     read choice
+    
     case "$choice" in
         1) install_proxy || PAUSE ;;
         2) delete_proxy || PAUSE ;;
