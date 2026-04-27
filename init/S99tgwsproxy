@@ -1,16 +1,22 @@
 #!/bin/sh
 SECRET=$(cat /opt/home/admin/proxy_secret.txt 2>/dev/null)
+PORT=$(cat /opt/home/admin/proxy_port.txt 2>/dev/null)
+HOST=$(cat /opt/home/admin/proxy_host.txt 2>/dev/null)
+[ -z "$PORT" ] && PORT=1443
+[ -z "$HOST" ] && HOST="0.0.0.0"
 cd /opt/home/admin/tg-ws-proxy
 
 start() {
     stop
-    if netstat -tuln 2>/dev/null | grep -q ":1443 "; then
-        echo "Port 1443 is busy, killing..."
-        fuser -k 1443/tcp 2>/dev/null
+    CURRENT_PORT=$(cat /opt/home/admin/proxy_port.txt 2>/dev/null)
+    [ -z "$CURRENT_PORT" ] && CURRENT_PORT=1443
+    if netstat -tuln 2>/dev/null | grep -q ":${CURRENT_PORT} "; then
+        echo "Port $CURRENT_PORT is busy, killing..."
+        fuser -k ${CURRENT_PORT}/tcp 2>/dev/null
         sleep 2
     fi
-    echo "Starting proxy on port 1443..."
-    python3 -m proxy.tg_ws_proxy --host 0.0.0.0 --port 1443 --secret "$SECRET" > /var/log/tg-ws-proxy.log 2>&1 &
+    echo "Starting proxy on $HOST:$CURRENT_PORT..."
+    python3 -m proxy.tg_ws_proxy --host "$HOST" --port "$CURRENT_PORT" --secret "$SECRET" > /var/log/tg-ws-proxy.log 2>&1 &
     sleep 3
     if pgrep -f "proxy.tg_ws_proxy" > /dev/null; then
         PID=$(pgrep -f "proxy.tg_ws_proxy" | head -1)
@@ -23,12 +29,14 @@ start() {
     fi
 }
 stop() {
+    CURRENT_PORT=$(cat /opt/home/admin/proxy_port.txt 2>/dev/null)
+    [ -z "$CURRENT_PORT" ] && CURRENT_PORT=1443
     if [ -f /var/run/tg-ws-proxy.pid ]; then
         kill -9 $(cat /var/run/tg-ws-proxy.pid) 2>/dev/null
         rm -f /var/run/tg-ws-proxy.pid
     fi
     pkill -9 -f "proxy.tg_ws_proxy" 2>/dev/null
-    fuser -k 1443/tcp 2>/dev/null
+    fuser -k ${CURRENT_PORT}/tcp 2>/dev/null
     echo "Stopped"
 }
 case "$1" in

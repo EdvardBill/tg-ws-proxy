@@ -9,6 +9,8 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 INIT_SCRIPT = "/opt/etc/init.d/S99tgwsproxy"
 PID_FILE = "/var/run/tg-ws-proxy.pid"
 SECRET_FILE = "/opt/home/admin/proxy_secret.txt"
+PORT_FILE = "/opt/home/admin/proxy_port.txt"
+HOST_FILE = "/opt/home/admin/proxy_host.txt"
 LISTEN_HOST = "0.0.0.0"
 LISTEN_PORT = 8081
 PROXY_CMD_MARK = "proxy.tg_ws_proxy"
@@ -309,6 +311,79 @@ HTML = """<!DOCTYPE html>
             flex-shrink: 0;
         }
         .copy-icon:active { transform: scale(0.9); color: #ff3b30; background: rgba(255, 59, 48, 0.1); }
+        .edit-icon {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 4px 8px;
+            border-radius: 8px;
+            transition: all 0.2s;
+            color: #28a745;
+            flex-shrink: 0;
+        }
+        .edit-icon:active { transform: scale(0.9); color: #ffc107; background: rgba(255, 193, 7, 0.1); }
+        .edit-input {
+            flex: 1;
+            font-family: 'SF Mono', 'Courier New', monospace;
+            font-size: 12px;
+            background: #080808;
+            padding: 8px 12px;
+            border-radius: 12px;
+            border: 1px solid #28a745;
+            color: #e0e0e0;
+            outline: none;
+        }
+        .edit-input:focus { border-color: #ffc107; }
+        .settings-card {
+            background: #0f0f0f;
+            border: 1px solid #2a2a2a;
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+        .settings-card h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: #ffc107;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .settings-card h3 i { font-size: 18px; }
+        .settings-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 0;
+            border-bottom: 1px solid #1f1f1f;
+        }
+        .settings-row:last-child { border-bottom: none; }
+        .settings-label {
+            font-weight: 500;
+            min-width: 80px;
+            font-size: 13px;
+            color: #a0a0a0;
+        }
+        .btn-save {
+            background: #28a745;
+            border: 1px solid #28a745;
+            color: #fff;
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+            width: 100%;
+            margin-top: 12px;
+        }
+        .btn-save:hover { background: #218838; }
+        .btn-save:active { transform: scale(0.97); }
+        .btn-save:disabled { background: #555; border-color: #555; cursor: not-allowed; }
         .info-link {
             flex: 1;
         }
@@ -448,6 +523,25 @@ HTML = """<!DOCTYPE html>
             <div id="link" class="info-link"></div>
         </div>
     </div>
+    <div id="settingsCard" class="settings-card">
+        <h3><i class="fas fa-cog"></i> Настройки</h3>
+        <div class="settings-row">
+            <span class="settings-label">Хост</span>
+            <input type="text" id="editHost" class="edit-input" placeholder="IP адрес">
+            <button class="edit-icon" onclick="saveSetting('host')"><i class="fas fa-save"></i></button>
+        </div>
+        <div class="settings-row">
+            <span class="settings-label">Порт</span>
+            <input type="number" id="editPort" class="edit-input" placeholder="1443">
+            <button class="edit-icon" onclick="saveSetting('port')"><i class="fas fa-save"></i></button>
+        </div>
+        <div class="settings-row">
+            <span class="settings-label">Ключ</span>
+            <input type="text" id="editSecret" class="edit-input" placeholder="секретный ключ (32 символа)">
+            <button class="edit-icon" onclick="saveSetting('secret')"><i class="fas fa-save"></i></button>
+        </div>
+        <button id="btnRestart" class="btn-save" onclick="restartWithNewConfig()" disabled><i class="fas fa-sync"></i> Сохранить и перезапустить</button>
+    </div>
     <div class="instruction">
         <h3><i class="fas fa-book-open"></i> Инструкция</h3>
         <ol>
@@ -463,6 +557,9 @@ HTML = """<!DOCTYPE html>
     </div>
 </div>
 <script>
+    let currentConfig = { host: '', port: '', secret: '' };
+    let pendingChanges = false;
+
     function showToast(message) {
         let toast = document.createElement('div');
         toast.className = 'toast';
@@ -483,12 +580,46 @@ HTML = """<!DOCTYPE html>
             })
             .catch(() => showToast('✗ Ошибка связи'));
     }
+    function checkPendingChanges() {
+        const h = document.getElementById('editHost').value.trim();
+        const p = document.getElementById('editPort').value.trim();
+        const s = document.getElementById('editSecret').value.trim();
+        pendingChanges = (h !== currentConfig.host) || (p !== currentConfig.port) || (s !== currentConfig.secret);
+        document.getElementById('btnRestart').disabled = !pendingChanges;
+    }
+    function saveSetting(type) {
+        const input = document.getElementById('edit' + type.charAt(0).toUpperCase() + type.slice(1));
+        const value = input.value.trim();
+        fetch('/config?' + new URLSearchParams({ action: 'save', type: type, value: value }))
+            .then(r => r.json())
+            .then(d => {
+                if (d.ok) {
+                    showToast('✓ Сохранено');
+                    checkPendingChanges();
+                } else {
+                    showToast('✗ Ошибка: ' + (d.error || 'unknown'));
+                }
+            })
+            .catch(() => showToast('✗ Ошибка связи'));
+    }
+    function restartWithNewConfig() {
+        sendAction('restart');
+    }
     function update() {
         fetch('/status?t=' + Date.now())
             .then(r => r.json())
             .then(d => {
                 const statusCard = document.getElementById('statusCard');
                 const infoCard = document.getElementById('infoCard');
+
+                currentConfig.host = d.host || '';
+                currentConfig.port = d.port || '';
+                currentConfig.secret = d.secret || '';
+
+                document.getElementById('editHost').value = currentConfig.host;
+                document.getElementById('editPort').value = currentConfig.port;
+                document.getElementById('editSecret').value = currentConfig.secret;
+                checkPendingChanges();
 
                 if (d.running) {
                     statusCard.className = 'status-card running';
@@ -553,16 +684,20 @@ class H(BaseHTTPRequestHandler):
             if pid:
                 ip = get_lan_ip()
                 sec = ""
+                port = "1443"
                 if os.path.exists(SECRET_FILE):
                     with open(SECRET_FILE, encoding="utf-8", errors="ignore") as f:
                         sec = f.read().strip()
+                if os.path.exists(PORT_FILE):
+                    with open(PORT_FILE, encoding="utf-8", errors="ignore") as f:
+                        port = f.read().strip() or "1443"
                 self.wfile.write(
                     json.dumps(
                         {
                             "running": 1,
                             "pid": pid,
                             "host": ip,
-                            "port": "1443",
+                            "port": port,
                             "secret": sec,
                         }
                     ).encode()
@@ -570,6 +705,50 @@ class H(BaseHTTPRequestHandler):
             else:
                 self.wfile.write(json.dumps({"running": 0}).encode())
             return
+            
+        if path.startswith("/config?"):
+            import urllib.parse
+            query = urllib.parse.parse_qs(urllib.parse.urlparse(path).query)
+            action = query.get("action", [None])[0]
+            if action == "save":
+                type_ = query.get("type", [None])[0]
+                value = query.get("value", [""])[0]
+                ok = False
+                error = "unknown"
+                if type_ == "secret":
+                    if len(value) == 32 and all(c in "0123456789abcdef" for c in value.lower()):
+                        try:
+                            with open(SECRET_FILE, "w", encoding="utf-8") as f:
+                                f.write(value.lower())
+                            ok = True
+                        except OSError as e:
+                            error = str(e)
+                    else:
+                        error = "Неверный формат (32 hex символа)"
+                elif type_ == "port":
+                    try:
+                        p = int(value)
+                        if 1 <= p <= 65535:
+                            with open(PORT_FILE, "w", encoding="utf-8") as f:
+                                f.write(str(p))
+                            ok = True
+                        else:
+                            error = "Порт должен быть 1-65535"
+                    except ValueError:
+                        error = "Неверный номер порта"
+                elif type_ == "host":
+                    import re
+                    if re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", value):
+                        with open(HOST_FILE, "w", encoding="utf-8") as f:
+                            f.write(value)
+                        ok = True
+                    else:
+                        error = "Неверный IP адрес"
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"ok": ok, "error": error}).encode())
+                return
             
         if path in ("/start", "/stop", "/restart"):
             action = path.lstrip("/")

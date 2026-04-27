@@ -17,6 +17,8 @@ BIN_PATH="/opt/bin/tg-ws-proxy"
 INIT_PATH="/opt/etc/init.d/S99tgwsproxy"
 SECRET_FILE="/opt/home/admin/proxy_secret.txt"
 PID_FILE="/var/run/tg-ws-proxy.pid"
+PORT_FILE="/opt/home/admin/proxy_port.txt"
+HOST_FILE="/opt/home/admin/proxy_host.txt"
 INFO_FILE="/opt/home/admin/proxy_info.txt"
 LOG_FILE="/var/log/tg-ws-proxy.log"
 WEB_SERVER="/tmp/web.py"
@@ -501,6 +503,8 @@ install_proxy() {
     fi
     SECRET=$(generate_secret)
     echo "$SECRET" > "$SECRET_FILE"
+    echo "1443" > "$PORT_FILE"
+    echo "0.0.0.0" > "$HOST_FILE"
     download_init_script || return 1
     download_web_interface || return 1
     echo -e "${CYAN}Запускаем сервисы...${NC}"
@@ -544,6 +548,8 @@ delete_proxy() {
     rm -f "$SECRET_FILE"
     rm -f "$PID_FILE"
     rm -f "$INFO_FILE"
+    rm -f "$PORT_FILE"
+    rm -f "$HOST_FILE"
     rm -f "$HOME_DIR/tg-ws-proxy.zip"
     rm -f "$LOG_FILE"
     rm -f "$WEB_LOG"
