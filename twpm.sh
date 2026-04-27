@@ -194,11 +194,6 @@ busybox_path() {
 }
 
 have_tool() {
-    case "$1" in
-        sed|awk|grep|xargs)
-            essential_tool_ok "$1" && return 0
-            ;;
-    esac
     if have_cmd "$1"; then
         return 0
     fi
