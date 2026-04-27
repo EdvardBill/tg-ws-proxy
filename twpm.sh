@@ -64,13 +64,16 @@ proxy_process_pid() {
 }
 
 monitor_system() {
-    CPU_USAGE="N/A"
     MEM_USAGE="N/A"
     
-    # Memory usage
-    if have_cmd free; then
-        MEM_RAW=$(free 2>/dev/null | grep Mem | awk '{print int($3/$2 * 100)}')
-        [ -n "$MEM_RAW" ] && MEM_USAGE="$MEM_RAW"
+    if [ -f /proc/meminfo ]; then
+        TOTAL=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
+        FREE=$(awk '/MemFree/ {print $2}' /proc/meminfo)
+        if [ -n "$TOTAL" ] && [ -n "$FREE" ]; then
+            USED=$((TOTAL - FREE))
+            PERC=$((USED * 100 / TOTAL))
+            MEM_USAGE="$PERC"
+        fi
     fi
     
     echo -e "${CYAN}Система: MEM ${MEM_USAGE}%${NC}"
