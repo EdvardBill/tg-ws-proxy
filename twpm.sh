@@ -64,48 +64,32 @@ proxy_process_pid() {
 }
 
 monitor_system() {
-    # CPU usage via /proc/stat (BusyBox-compatible)
     CPU_USAGE="N/A"
-    if [ -f /proc/stat ]; then
-        # First read
-        read _ user nice system idle iowait irq softirq steal < /proc/stat
-        idle1=$idle
-        total1=$((user + nice + system + idle + iowait + irq + softirq + steal))
-        sleep 0.5
-        read _ user nice system idle iowait irq softirq steal < /proc/stat
-        idle2=$idle
-        total2=$((user + nice + system + idle + iowait + irq + softirq + steal))
-        idle_diff=$((idle2 - idle1))
-        total_diff=$((total2 - total1))
-        if [ "$total_diff" -gt 0 ]; then
-            cpu_used=$((100 * (total_diff - idle_diff) / total_diff))
-            CPU_USAGE="$cpu_used"
-        fi
-    fi
-    if [ "$CPU_USAGE" = "N/A" ] && have_cmd top; then
-        CPU_RAW=$(top -bn1 2>/dev/null | grep -m1 "CPU:" | awk '{print $8}')
-        if [ -n "$CPU_RAW" ]; then
+    MEM_USAGE="N/A"
+    
+    # CPU usage via top (most compatible)
+    if have_cmd top; then
+        CPU_RAW=$(top -bn1 2>/dev/null | grep -m1 "CPU:" | awk '{print $8}' | tr -d '%')
+        if [ -n "$CPU_RAW" ] && [ "$CPU_RAW" -eq "$CPU_RAW" ] 2>/dev/null; then
             CPU_USAGE=$(awk "BEGIN {printf \"%.0f\", 100 - $CPU_RAW}")
         fi
     fi
 
-    # Memory usage via /proc/meminfo (BusyBox-compatible)
-    MEM_USAGE="N/A"
-    if [ -f /proc/meminfo ]; then
+    # Memory usage via free or /proc/meminfo
+    if have_cmd free; then
+        MEM_RAW=$(free 2>/dev/null | grep Mem | awk '{print $3/$2 * 100}')
+        if [ -n "$MEM_RAW" ]; then
+            MEM_USAGE=$(awk "BEGIN {printf \"%.1f\", $MEM_RAW}")
+        fi
+    elif [ -f /proc/meminfo ]; then
         MEM_TOTAL=$(grep -m1 MemTotal /proc/meminfo | awk '{print $2}')
-        MEM_FREE=$(grep -m1 MemFree /proc/meminfo | awk '{print $2}')
-        MEM_BUFFERS=$(grep -m1 Buffers /proc/meminfo | awk '{print $2}')
-        MEM_CACHED=$(grep -m1 Cached /proc/meminfo | awk '{print $2}')
-        if [ -n "$MEM_TOTAL" ] && [ "$MEM_TOTAL" -gt 0 ]; then
-            MEM_USED=$((MEM_TOTAL - MEM_FREE - MEM_BUFFERS - MEM_CACHED))
-            MEM_USAGE=$(awk "BEGIN {printf \"%.1f\", $MEM_USED * 100 / $MEM_TOTAL}")
+        MEM_AVAIL=$(grep -m1 MemAvailable /proc/meminfo | awk '{print $2}')
+        [ -z "$MEM_AVAIL" ] && MEM_AVAIL=$(grep -m1 MemFree /proc/meminfo | awk '{print $2}')
+        if [ -n "$MEM_TOTAL" ] && [ -n "$MEM_AVAIL" ]; then
+            MEM_USAGE=$(awk "BEGIN {printf \"%.1f\", ($MEM_TOTAL - $MEM_AVAIL) / $MEM_TOTAL * 100}")
         fi
     fi
-    if [ "$MEM_USAGE" = "N/A" ] && have_cmd free; then
-        MEM_RAW=$(free 2>/dev/null | grep -m1 Mem | awk '{printf "%.1f", $3/$2 * 100}')
-        [ -n "$MEM_RAW" ] && MEM_USAGE="$MEM_RAW"
-    fi
-
+    
     echo -e "${CYAN}Система: CPU ${CPU_USAGE}% | MEM ${MEM_USAGE}%${NC}"
 }
 
@@ -211,24 +195,18 @@ busybox_path() {
                 dir=$(dirname "$p")
                 if [ -x "$dir/busybox" ]; then
                     echo "$dir/busybox"
-            ;;
-        grep)
-            for d in /opt/bin /usr/bin /bin; do
-                if [ -x "$d/grep" ] && echo ok | "$d/grep" ok >/dev/null 2>&1; then
                     return 0
                 fi
-            done
-            echo ok | grep ok >/dev/null 2>&1 && return 0
-            ;;
-        xargs)
-            for d in /opt/bin /usr/bin /bin; do
-                if [ -x "$d/xargs" ] && echo ok | "$d/xargs" echo >/dev/null 2>&1; then
+                ;;
+            */busybox)
+                dir=$(dirname "$p")
+                if [ -x "$dir/$tgt" ]; then
+                    echo "$dir/$tgt"
                     return 0
                 fi
-            done
-            echo ok | xargs echo >/dev/null 2>&1 && return 0
-            ;;
-    esac
+                ;;
+        esac
+    done
     return 1
 }
 
