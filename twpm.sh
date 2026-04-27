@@ -162,6 +162,7 @@ refresh_path() {
     export PATH="/opt/bin:/opt/sbin:/opt/usr/bin:/usr/bin:/bin:/sbin:$PATH"
     hash -r 2>/dev/null
 }
+
 resolve_python_cmd() {
     if [ -f "/opt/bin/python3" ]; then
         echo "/opt/bin/python3"
@@ -173,15 +174,7 @@ resolve_python_cmd() {
 }
 
 have_cmd() {
-    if command -v "$1" >/dev/null 2>&1; then
-        return 0
-    fi
-    for d in /opt/bin /opt/sbin /opt/usr/bin /usr/bin /bin /sbin /usr/sbin; do
-        if [ -x "$d/$1" ]; then
-            return 0
-        fi
-    done
-    return 1
+    command -v "$1" >/dev/null 2>&1
 }
 
 busybox_path() {
@@ -195,21 +188,27 @@ busybox_path() {
             return 0
         fi
     done
-    for p in /bin/sed /bin/grep /bin/awk /usr/bin/sed /usr/bin/grep; do
-        [ -e "$p" ] || continue
-        tgt=$(readlink "$p" 2>/dev/null)
-        [ -n "$tgt" ] || continue
-        case "$tgt" in
-            /*)
-                if [ -x "$tgt" ]; then
-                    echo "$tgt"
+    return 1
+}
+
+essential_tool_ok() {
+    cmd="$1"
+    case "$cmd" in
+        sed)
+            for d in /opt/bin /usr/bin /bin; do
+                if [ -x "$d/sed" ] && echo ok | "$d/sed" 's/ok/ok/' >/dev/null 2>&1; then
                     return 0
                 fi
-                ;;
-            busybox)
-                dir=$(dirname "$p")
-                if [ -x "$dir/busybox" ]; then
-                    echo "$dir/busybox"
+            done
+            echo ok | sed 's/ok/ok/' >/dev/null 2>&1 && return 0
+            ;;
+        awk)
+            for d in /opt/bin /usr/bin /bin; do
+                if [ -x "$d/awk" ] && echo ok | "$d/awk" '{print $1}' >/dev/null 2>&1; then
+                    return 0
+                fi
+            done
+            echo ok | awk '{print $1}' >/dev/null 2>&1 && return 0
             ;;
         grep)
             for d in /opt/bin /usr/bin /bin; do
@@ -227,16 +226,14 @@ busybox_path() {
             done
             echo ok | xargs echo >/dev/null 2>&1 && return 0
             ;;
+        *)
+            return 1
+            ;;
     esac
     return 1
 }
 
 have_tool() {
-    case "$1" in
-        sed|awk|grep|xargs)
-            essential_tool_ok "$1" && return 0
-            ;;
-    esac
     if have_cmd "$1"; then
         return 0
     fi
@@ -253,7 +250,7 @@ have_tool() {
 check_required_tools() {
     MISSING=""
     for cmd in sed awk grep xargs; do
-        if ! have_tool "$cmd"; then
+        if ! essential_tool_ok "$cmd"; then
             MISSING="$MISSING $cmd"
         fi
     done
@@ -265,7 +262,7 @@ check_required_tools() {
         refresh_path
         MISSING=""
         for cmd in sed awk grep xargs; do
-            if ! have_tool "$cmd"; then
+            if ! essential_tool_ok "$cmd"; then
                 MISSING="$MISSING $cmd"
             fi
         done
@@ -553,7 +550,7 @@ EOF
         /sbin/mtd_storage.sh save > /dev/null 2>&1
     fi
     sleep 3
-       if proxy_process_running; then
+    if proxy_process_running; then
         echo -e "${GREEN}УСТАНОВКА УСПЕШНО ЗАВЕРШЕНА!${NC}"
     else
         echo -e "\n${RED}Ошибка: Сервис не запустился.${NC}"
@@ -619,7 +616,7 @@ restart_proxy() {
 menu() {
     refresh_path
     clear
-   echo -e "${RED} ___________  _      ______  ___                   ${NC}"
+    echo -e "${RED} ___________  _      ______  ___                   ${NC}"
     echo -e "${RED}/_  __/ ___/ | | /| / / __/ / _ \_______ __ ____ __${NC}"
     echo -e "${RED} / / / (_ /  | |/ |/ /\ \  / ___/ __/ _ \\\\ \ / // /${NC}"
     echo -e "${RED}/_/  \___/   |__/|__/___/ /_/  /_/  \___/_\_\\_, / ${NC}"
