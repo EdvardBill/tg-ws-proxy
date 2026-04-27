@@ -67,16 +67,25 @@ monitor_system() {
     MEM_USAGE="N/A"
     
     if [ -f /proc/meminfo ]; then
-        TOTAL=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
-        FREE=$(awk '/MemFree/ {print $2}' /proc/meminfo)
-        if [ -n "$TOTAL" ] && [ -n "$FREE" ]; then
+        while read -r line; do
+            case "$line" in
+                MemTotal:*)
+                    TOTAL=$(echo "$line" | sed 's/[^0-9]//g')
+                    ;;
+                MemFree:*)
+                    FREE=$(echo "$line" | sed 's/[^0-9]//g')
+                    break
+                    ;;
+            esac
+        done < /proc/meminfo
+        if [ -n "$TOTAL" ] && [ -n "$FREE" ] && [ "$TOTAL" -gt 0 ] 2>/dev/null; then
             USED=$((TOTAL - FREE))
             PERC=$((USED * 100 / TOTAL))
             MEM_USAGE="$PERC"
         fi
     fi
     
-    echo -e "${CYAN}Система: MEM ${MEM_USAGE}%${NC}"
+    echo -e "${RED}ОЗУ: ${MEM_USAGE}%${NC}"
 }
 
 if [ -d "/opt/home/admin" ]; then
@@ -554,7 +563,8 @@ delete_proxy() {
     sed -i '\|/opt/bin/python3 /tmp/web.py|d' /etc/storage/started_script.sh 2>/dev/null
     /sbin/mtd_storage.sh save > /dev/null 2>&1
     echo -e "${GREEN}УДАЛЕНИЕ ЗАВЕРШЕНО!${NC}"
-    PAUSE
+    echo -e "${YELLOW}Нажмите Enter для продолжения...${NC}"
+    read dummy
 }
 
 restart_proxy() {
@@ -581,6 +591,7 @@ menu() {
     echo -e "${RED} / / / (_ /  | |/ |/ /\ \  / ___/ __/ _ \\\\ \ / // /${NC}"
     echo -e "${RED}/_/  \___/   |__/|__/___/ /_/  /_/  \___/_\_\\_, / ${NC}"
     echo -e "${RED}                                            /___/  ${NC}"
+    monitor_system
     if proxy_process_running; then
         PID=$(proxy_process_pid)
         LOCAL_IP=$(get_router_ip)
@@ -594,7 +605,6 @@ menu() {
     else
         echo -e "\n${YELLOW}Статус: ${RED}○ НЕ ЗАПУЩЕН${NC}"
     fi
-    monitor_system
     echo -e "\n${GREEN}1) Установить${NC}"
     echo -e "${GREEN}2) Удалить${NC}"
     echo -e "${GREEN}3) Перезапустить${NC}"
@@ -603,7 +613,7 @@ menu() {
     read choice
     case "$choice" in
         1) install_proxy || PAUSE ;;
-        2) delete_proxy || PAUSE ;;
+        2) delete_proxy ;;
         3) restart_proxy ;;
         0)
             clear
