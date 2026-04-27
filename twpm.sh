@@ -45,44 +45,54 @@ patch_init_if_no_pkill() {
     sed -i '/pkill.*proxy\.tg_ws_proxy/d' "$INIT_PATH" 2>/dev/null || true
 }
 
+# Исправленные функции определения статуса через /proc/net/tcp
 proxy_process_running() {
-    if have_cmd pgrep; then
-        pgrep -f "tg-ws-proxy" > /dev/null 2>&1 && return 0
-        pgrep -f "proxy.tg_ws_proxy" > /dev/null 2>&1 && return 0
-        pgrep -f "python.*proxy" > /dev/null 2>&1 && return 0
-        return 1
+    # Проверяем порт 1443 (hex: 05A3) через /proc/net/tcp
+    if [ -f /proc/net/tcp ]; then
+        if grep -q ":05A3" /proc/net/tcp 2>/dev/null; then
+            return 0
+        fi
     fi
-    
-    RUNNING=$(ps 2>/dev/null | grep -E "tg-ws-proxy|proxy\.tg_ws_proxy" | grep -v grep | grep -v "twpm.sh" | grep -v "S99tgwsproxy")
-    if [ -n "$RUNNING" ]; then
-        return 0
+    if [ -f /proc/net/tcp6 ]; then
+        if grep -q ":05A3" /proc/net/tcp6 2>/dev/null; then
+            return 0
+        fi
     fi
-    
+    # Альтернативная проверка через netstat
     if have_cmd netstat; then
-        netstat -tuln 2>/dev/null | grep ":1443" > /dev/null 2>&1 && return 0
+        netstat -tuln 2>/dev/null | grep -q ":1443"
+        return $?
     fi
-    
     return 1
 }
 
 proxy_process_pid() {
-    PID=""
-    
+    # Находим PID через inode из /proc/net/tcp
+    if [ -f /proc/net/tcp ]; then
+        INODE=$(grep ":05A3" /proc/net/tcp 2>/dev/null | awk '{print $10}')
+        if [ -n "$INODE" ]; then
+            for pid in /proc/[0-9]*; do
+                if ls -l "$pid/fd/" 2>/dev/null | grep -q "socket:\[$INODE\]"; then
+                    echo $(basename "$pid")
+                    return 0
+                fi
+            done
+        fi
+    fi
+    # Альтернатива через pgrep
     if have_cmd pgrep; then
-        PID=$(pgrep -f "tg-ws-proxy" 2>/dev/null | head -1)
-        if [ -z "$PID" ]; then
-            PID=$(pgrep -f "proxy.tg_ws_proxy" 2>/dev/null | head -1)
-        fi
-        if [ -z "$PID" ]; then
-            PID=$(pgrep -f "python.*proxy" 2>/dev/null | head -1)
+        PID=$(pgrep -f "tg_ws_proxy" 2>/dev/null | head -1)
+        if [ -n "$PID" ]; then
+            echo "$PID"
+            return 0
         fi
     fi
-    
-    if [ -z "$PID" ]; then
-        PID=$(ps 2>/dev/null | grep -E "tg-ws-proxy|proxy\.tg_ws_proxy" | grep -v grep | grep -v "twpm.sh" | grep -v "S99tgwsproxy" | awk '{print $1}' | head -1)
+    # Если порт открыт, но PID не найден
+    if proxy_process_running; then
+        echo "активен"
+        return 0
     fi
-    
-    echo "$PID"
+    echo ""
 }
 
 force_stop_all_proxy() {
@@ -95,25 +105,18 @@ force_stop_all_proxy() {
     if have_cmd pkill; then
         pkill -f "tg-ws-proxy" 2>/dev/null
         pkill -f "proxy\.tg_ws_proxy" 2>/dev/null
+        pkill -f "tg_ws_proxy" 2>/dev/null
         sleep 1
         pkill -9 -f "tg-ws-proxy" 2>/dev/null
         pkill -9 -f "proxy\.tg_ws_proxy" 2>/dev/null
     fi
     
-    PIDS=$(ps 2>/dev/null | grep -E "python.*proxy|tg-ws-proxy" | grep -v grep | awk '{print $1}')
-    for pid in $PIDS; do
-        kill -9 "$pid" 2>/dev/null
-    done
+    # Убиваем процесс, занимающий порт 1443
+    fuser -k 1443/tcp 2>/dev/null
     
     stop_web_server_process
     
     sleep 2
-    
-    if proxy_process_running; then
-        echo -e "${YELLOW}Предупреждение: Некоторые процессы не остановились${NC}"
-    else
-        echo -e "${GREEN}Все процессы остановлены${NC}"
-    fi
 }
 
 if [ -d "/opt/home/admin" ]; then
@@ -486,29 +489,39 @@ install_proxy() {
     download_web_interface || return 1
     
     echo -e "${CYAN}Запускаем сервисы...${NC}"
-    if ! run_init start; then
-        echo -e "${RED}Ошибка запуска init-скрипта${NC}"
+    
+    if [ -f "$INIT_PATH" ]; then
+        sh "$INIT_PATH" start
+        sleep 3
     fi
     
-    sleep 2
     stop_web_server_process
     sleep 1
     "$PYTHON_CMD" "$WEB_SERVER" >>"$WEB_LOG" 2>&1 &
     
+    if ! grep -q "tg-ws-proxy" /etc/storage/started_script.sh 2>/dev/null; then
+        cat >> /etc/storage/started_script.sh << 'EOF'
+
+# TG WS Proxy
+sh /opt/etc/init.d/S99tgwsproxy start
+/opt/bin/python3 /tmp/web.py >>/tmp/tg-ws-web.log 2>&1 &
+EOF
+        chmod +x /etc/storage/started_script.sh 2>/dev/null
+        /sbin/mtd_storage.sh save > /dev/null 2>&1
+    fi
+    
     sleep 3
+    
     if proxy_process_running; then
         echo -e "${GREEN}УСТАНОВКА УСПЕШНО ЗАВЕРШЕНА!${NC}"
     else
-        if have_cmd netstat; then
-            if netstat -tuln 2>/dev/null | grep ":1443" > /dev/null 2>&1; then
-                echo -e "${GREEN}УСТАНОВКА УСПЕШНО ЗАВЕРШЕНА!${NC}"
-                echo -e "${YELLOW}Прокси запущен на порту 1443${NC}"
-            else
-                echo -e "\n${RED}Ошибка: Сервис не запустился.${NC}"
-                echo -e "${YELLOW}Проверьте логи: cat $LOG_FILE${NC}"
-            fi
+        # Дополнительная проверка через /proc
+        if grep -q ":05A3" /proc/net/tcp 2>/dev/null; then
+            echo -e "${GREEN}УСТАНОВКА УСПЕШНО ЗАВЕРШЕНА!${NC}"
+            echo -e "${YELLOW}Прокси запущен на порту 1443${NC}"
         else
-            echo -e "${GREEN}УСТАНОВКА ЗАВЕРШЕНА!${NC}"
+            echo -e "\n${RED}Ошибка: Сервис не запустился.${NC}"
+            echo -e "${YELLOW}Проверьте логи: cat $LOG_FILE${NC}"
         fi
     fi
     PAUSE
@@ -544,8 +557,8 @@ delete_proxy() {
     sed -i '/S99tgwsproxy/d' /etc/storage/started_script.sh 2>/dev/null
     
     echo -e "${GREEN}УДАЛЕНИЕ ЗАВЕРШЕНО!${NC}"
-    echo -e "${YELLOW}Скрипт будет удален...${NC}"
-    rm -f "$0"
+    echo -e "${YELLOW}Нажмите Enter для выхода...${NC}"
+    read dummy
     exit 0
 }
 
