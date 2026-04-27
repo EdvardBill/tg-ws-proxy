@@ -46,48 +46,63 @@ patch_init_if_no_pkill() {
 }
 
 proxy_process_running() {
+    # Проверяем только наш конкретный прокси процесс
     if have_cmd pgrep; then
-        pgrep -f "proxy.tg_ws_proxy" > /dev/null 2>&1
-        return $?
+        pgrep -f "python.*proxy\.tg_ws_proxy" > /dev/null 2>&1 && return 0
+        pgrep -f "tg-ws-proxy" > /dev/null 2>&1 && return 0
+        return 1
     fi
-    ps | grep "proxy.tg_ws_proxy" | grep -v grep > /dev/null 2>&1
-    return $?
+    
+    RUNNING=$(ps 2>/dev/null | grep -E "python.*proxy\.tg_ws_proxy|tg-ws-proxy" | grep -v grep | grep -v "twpm.sh" | grep -v "S99tgwsproxy")
+    [ -n "$RUNNING" ]
 }
 
 proxy_process_pid() {
     PID=""
     
-    # Способ 1: через pgrep (самый надежный)
     if have_cmd pgrep; then
-        PID=$(pgrep -f "proxy.tg_ws_proxy" 2>/dev/null | head -1)
+        PID=$(pgrep -f "python.*proxy\.tg_ws_proxy" 2>/dev/null | head -1)
+        if [ -z "$PID" ]; then
+            PID=$(pgrep -f "tg-ws-proxy" 2>/dev/null | head -1)
+        fi
     fi
     
-    # Способ 2: через ps с разными опциями
     if [ -z "$PID" ]; then
-        # Пробуем разные варианты ps
-        for ps_cmd in "ps w" "ps aux" "ps -ef" "ps"; do
-            PID=$($ps_cmd 2>/dev/null | grep -E "python.*proxy\.tg_ws_proxy|proxy\.tg_ws_proxy" | grep -v grep | awk '{print $1}' | head -1)
-            [ -n "$PID" ] && break
-        done
-    fi
-    
-    # Способ 3: поиск через /proc
-    if [ -z "$PID" ] && [ -d "/proc" ]; then
-        for pid in /proc/[0-9]*; do
-            [ -f "$pid/cmdline" ] || continue
-            if grep -q "proxy.tg_ws_proxy" "$pid/cmdline" 2>/dev/null; then
-                PID=$(basename "$pid")
-                break
-            fi
-        done
-    fi
-    
-    # Способ 4: через pidof
-    if [ -z "$PID" ] && have_cmd pidof; then
-        PID=$(pidof "proxy.tg_ws_proxy" 2>/dev/null)
+        PID=$(ps 2>/dev/null | grep -E "python.*proxy\.tg_ws_proxy|tg-ws-proxy" | grep -v grep | grep -v "twpm.sh" | grep -v "S99tgwsproxy" | awk '{print $1}' | head -1)
     fi
     
     echo "$PID"
+}
+
+force_stop_all_proxy() {
+    echo -e "${CYAN}Полная остановка всех процессов прокси...${NC}"
+    
+    if [ -f "$INIT_PATH" ]; then
+        run_init stop 2>/dev/null
+    fi
+    
+    if have_cmd pkill; then
+        pkill -f "tg-ws-proxy" 2>/dev/null
+        pkill -f "proxy\.tg_ws_proxy" 2>/dev/null
+        sleep 1
+        pkill -9 -f "tg-ws-proxy" 2>/dev/null
+        pkill -9 -f "proxy\.tg_ws_proxy" 2>/dev/null
+    fi
+    
+    PIDS=$(ps 2>/dev/null | grep -E "python.*proxy|tg-ws-proxy" | grep -v grep | awk '{print $1}')
+    for pid in $PIDS; do
+        kill -9 "$pid" 2>/dev/null
+    done
+    
+    stop_web_server_process
+    
+    sleep 2
+    
+    if proxy_process_running; then
+        echo -e "${YELLOW}Предупреждение: Некоторые процессы не остановились${NC}"
+    else
+        echo -e "${GREEN}Все процессы остановлены${NC}"
+    fi
 }
 
 if [ -d "/opt/home/admin" ]; then
@@ -114,25 +129,22 @@ check_entware() {
                 echo -e "${CYAN}Детектирована архитектура $ARCH. Скачиваем Entware...${NC}"
                 mkdir -p /opt
                 cd /opt
-                if [ -f "entware-install.sh" ]; then
-                    rm -f entware-install.sh
-                fi
                 curl -s -O https://bin.entware.net/mipssf-k3.4/entware-install.sh
                 chmod +x entware-install.sh
                 ./entware-install.sh
                 if [ $? -ne 0 ]; then
-                    echo -e "${RED}Ошибка: Не удалось установить Entware автоматически. Установите вручную.${NC}"
+                    echo -e "${RED}Ошибка: Не удалось установить Entware автоматически.${NC}"
                     PAUSE
                     exit 1
                 fi
             else
-                echo -e "${RED}Ошибка: Неподдерживаемая архитектура $ARCH. Установите Entware вручную.${NC}"
+                echo -e "${RED}Ошибка: Неподдерживаемая архитектура $ARCH.${NC}"
                 PAUSE
                 exit 1
             fi
         fi
         if [ ! -d "/opt/bin" ] || [ ! -f "/opt/etc/opkg.conf" ]; then
-            echo -e "${RED}Ошибка: Entware всё ещё не установлен. Установите вручную.${NC}"
+            echo -e "${RED}Ошибка: Entware не установлен.${NC}"
             PAUSE
             exit 1
         fi
@@ -238,7 +250,6 @@ check_required_tools() {
     done
     if [ -n "$MISSING" ]; then
         echo -e "${YELLOW}Не удалось найти утилиты:$MISSING${NC}"
-        echo -e "${CYAN}Пробуем установить через opkg (Entware)...${NC}"
         opkg update >/dev/null 2>&1
         opkg install sed grep gawk findutils >/dev/null 2>&1 || true
         refresh_path
@@ -251,7 +262,6 @@ check_required_tools() {
     fi
     if [ -n "$MISSING" ]; then
         echo -e "${RED}Ошибка: отсутствуют утилиты:$MISSING${NC}"
-        echo -e "${YELLOW}Установите вручную: opkg update && opkg install sed grep gawk findutils${NC}"
         return 1
     fi
     return 0
@@ -268,7 +278,6 @@ install_python() {
         opkg update > /dev/null 2>&1
         ARCH=$(uname -m)
         if [ "$ARCH" = "mipsel" ] || [ "$ARCH" = "mips" ]; then
-            echo -e "${CYAN}Оптимизация для mipsel: устанавливаем python3-lite...${NC}"
             opkg install python3-lite python3-pip > /dev/null 2>&1
         else
             opkg install python3 python3-pip python3-dev > /dev/null 2>&1
@@ -277,13 +286,9 @@ install_python() {
         PYTHON_CMD=$(resolve_python_cmd)
     fi
     if [ -n "$PYTHON_CMD" ]; then
-        if [ "$PYTHON_CMD" = "python3" ]; then
-            echo -e "${GREEN}$(python3 --version 2>&1) найден .... [OK]${NC}"
-        else
-            echo -e "${GREEN}$($PYTHON_CMD --version 2>&1) найден .... [OK]${NC}"
-        fi
+        echo -e "${GREEN}Python найден .... [OK]${NC}"
     else
-        echo -e "${RED}Ошибка: python3 не найден после установки.${NC}"
+        echo -e "${RED}Ошибка: python3 не найден.${NC}"
         return 1
     fi
     opkg install python3-cryptography > /dev/null 2>&1
@@ -318,8 +323,6 @@ generate_secret() {
     if [ -z "$SECRET" ]; then
         if have_tool md5sum; then
             SECRET=$(date +%s | md5sum | cut -d' ' -f1)
-        elif have_tool sha256sum; then
-            SECRET=$(date +%s | sha256sum | cut -c1-32)
         else
             SECRET="$(date +%s)$$"
         fi
@@ -331,28 +334,6 @@ get_router_ip() {
     IP=$(nvram get lan_ipaddr 2>/dev/null)
     [ -z "$IP" ] && IP="192.168.1.1"
     echo "$IP"
-}
-
-stop_proxy_processes() {
-    if have_cmd pgrep && have_cmd pkill; then
-        if pgrep -f "proxy.tg_ws_proxy" > /dev/null 2>&1; then
-            pkill -f "proxy.tg_ws_proxy" 2>/dev/null
-            sleep 1
-        fi
-        if pgrep -f "proxy.tg_ws_proxy" > /dev/null 2>&1; then
-            pkill -9 -f "proxy.tg_ws_proxy" 2>/dev/null
-        fi
-        return 0
-    fi
-    PIDS=$(ps | awk '/proxy\.tg_ws_proxy/ && !/awk/ {print $1}')
-    if [ -n "$PIDS" ]; then
-        echo "$PIDS" | xargs kill 2>/dev/null
-        sleep 1
-    fi
-    PIDS=$(ps | awk '/proxy\.tg_ws_proxy/ && !/awk/ {print $1}')
-    if [ -n "$PIDS" ]; then
-        echo "$PIDS" | xargs kill -9 2>/dev/null
-    fi
 }
 
 stop_web_server_process() {
@@ -380,19 +361,6 @@ stop_web_server_process() {
     for pid in $(ps 2>/dev/null | awk '/\/tmp\/web\.py/ {print $1}'); do
         kill -9 "$pid" 2>/dev/null
     done
-    if have_cmd fuser; then
-        fuser -k 8081/tcp 2>/dev/null
-    fi
-}
-
-stop_all_proxy() {
-    echo -e "${CYAN}Останавливаем старые процессы...${NC}"
-    if [ -f "$INIT_PATH" ]; then
-        run_init stop 2>/dev/null
-    fi
-    stop_web_server_process
-    stop_proxy_processes
-    sleep 2
 }
 
 download_web_interface() {
@@ -434,8 +402,10 @@ install_proxy() {
     check_entware || return 1
     refresh_path
     check_required_tools || return 1
-    check_optional_tools
-    stop_all_proxy
+    
+    # Полная остановка перед установкой
+    force_stop_all_proxy
+    
     mkdir -p "$(dirname "$SECRET_FILE")"
     mkdir -p "$(dirname "$INFO_FILE")"
     mkdir -p "$(dirname "$LOG_FILE")"
@@ -443,33 +413,30 @@ install_proxy() {
     install_unzip || return 1
     install_wget || return 1
     refresh_path
+    
     echo -e "${CYAN}Подготовка к установке...${NC}"
     rm -rf "$PROXY_DIR"
     rm -f "$BIN_PATH"
-    echo -e "${CYAN}Скачиваем TG WS Proxy из репозитория...${NC}"
+    
+    echo -e "${CYAN}Скачиваем TG WS Proxy...${NC}"
     cd "$HOME_DIR" || return 1
     if ! wget -q --timeout=30 -O tg-ws-proxy.zip "$PROXY_REPO_URL" 2>/dev/null; then
         if ! curl -L --connect-timeout 30 -s -o tg-ws-proxy.zip "$PROXY_REPO_URL"; then
-            if ! wget -q --timeout=30 -O tg-ws-proxy.zip "$PROXY_REPO_URL_ALT" 2>/dev/null; then
-                if ! curl -L --connect-timeout 30 -s -o tg-ws-proxy.zip "$PROXY_REPO_URL_ALT"; then
-                    echo -e "${RED}Ошибка скачивания!${NC}"
-                    PAUSE
-                    return 1
-                fi
-            fi
+            echo -e "${RED}Ошибка скачивания!${NC}"
+            PAUSE
+            return 1
         fi
     fi
+    
     if [ ! -f "tg-ws-proxy.zip" ] || [ ! -s "tg-ws-proxy.zip" ]; then
         echo -e "${RED}Ошибка: файл не скачан или пустой${NC}"
         PAUSE
         return 1
     fi
+    
     echo -e "${CYAN}Распаковываем...${NC}"
-    if ! unzip -o tg-ws-proxy.zip > /dev/null 2>&1; then
-        echo -e "${RED}Ошибка: unzip не смог распаковать архив (файл битый или не zip).${NC}"
-        PAUSE
-        return 1
-    fi
+    unzip -o tg-ws-proxy.zip > /dev/null 2>&1
+    
     SRC_DIR=""
     for d in tg-ws-proxy-main tg-ws-proxy-master; do
         if [ -d "$d" ]; then
@@ -477,60 +444,47 @@ install_proxy() {
             break
         fi
     done
+    
     if [ -z "$SRC_DIR" ]; then
-        for d in tg-ws-proxy-*; do
-            [ -d "$d" ] || continue
-            SRC_DIR="$d"
-            break
-        done
+        SRC_DIR=$(find . -maxdepth 1 -type d -name "tg-ws-proxy-*" | head -1)
     fi
-    if [ -z "$SRC_DIR" ]; then
-        for d in *; do
-            [ -d "$d" ] || continue
-            [ -d "$d/proxy" ] || continue
-            SRC_DIR="$d"
-            break
-        done
-    fi
+    
     if [ -z "$SRC_DIR" ] || [ ! -d "$SRC_DIR/proxy" ]; then
-        echo -e "${RED}Ошибка: не найдена папка с прокси (ожидается каталог с подпапкой proxy).${NC}"
-        echo -e "${YELLOW}Содержимое $HOME_DIR после распаковки:${NC}"
-        ls -la 2>/dev/null
+        echo -e "${RED}Ошибка: не найдена папка с прокси${NC}"
         PAUSE
         return 1
     fi
+    
     rm -rf tg-ws-proxy
     mv "$SRC_DIR" tg-ws-proxy
     PROXY_DIR="$HOME_DIR/tg-ws-proxy"
     rm -f tg-ws-proxy.zip
+    
     cd "$PROXY_DIR" || return 1
+    
     echo -e "${CYAN}Устанавливаем модуль...${NC}"
+    PYTHON_CMD=$(resolve_python_cmd)
     SITE_PACKAGES=$($PYTHON_CMD -c "import site; print(site.getsitepackages()[0])" 2>/dev/null)
     if [ -n "$SITE_PACKAGES" ]; then
         cp -r proxy "$SITE_PACKAGES/"
     fi
+    
     SECRET=$(generate_secret)
     echo "$SECRET" > "$SECRET_FILE"
+    
     download_init_script || return 1
     download_web_interface || return 1
+    
     echo -e "${CYAN}Запускаем сервисы...${NC}"
     if ! run_init start; then
-        echo -e "${RED}Ошибка запуска init-скрипта. Попробуйте вручную: sh $INIT_PATH start${NC}"
+        echo -e "${RED}Ошибка запуска init-скрипта${NC}"
     fi
+    
     sleep 2
     stop_web_server_process
     sleep 1
     "$PYTHON_CMD" "$WEB_SERVER" >>"$WEB_LOG" 2>&1 &
-    if ! grep -q "tg-ws-proxy" /etc/storage/started_script.sh 2>/dev/null; then
-        cat >> /etc/storage/started_script.sh << 'EOF'
-
-# TG WS Proxy
-sh /opt/etc/init.d/S99tgwsproxy start
-/opt/bin/python3 /tmp/web.py >>/tmp/tg-ws-web.log 2>&1 &
-EOF
-        chmod +x /etc/storage/started_script.sh 2>/dev/null
-        /sbin/mtd_storage.sh save > /dev/null 2>&1
-    fi
+    
     sleep 3
     if proxy_process_running; then
         echo -e "${GREEN}УСТАНОВКА УСПЕШНО ЗАВЕРШЕНА!${NC}"
@@ -544,9 +498,9 @@ EOF
 delete_proxy() {
     echo -e "${MAGENTA}УДАЛЕНИЕ TG WS PROXY${NC}"
     echo -e "${CYAN}Останавливаем сервисы...${NC}"
-    stop_web_server_process
-    [ -f "$INIT_PATH" ] && run_init stop 2>/dev/null
-    stop_proxy_processes
+    
+    force_stop_all_proxy
+    
     echo -e "${CYAN}Удаляем файлы...${NC}"
     rm -rf "$PROXY_DIR"
     rm -f "$BIN_PATH"
@@ -557,25 +511,22 @@ delete_proxy() {
     rm -f "$LOG_FILE"
     rm -f "$WEB_LOG"
     rm -f "$WEB_SERVER"
+    
     PYTHON_CMD=$(resolve_python_cmd)
-    SITE_PACKAGES=""
     if [ -n "$PYTHON_CMD" ]; then
         SITE_PACKAGES=$($PYTHON_CMD -c "import site; print(site.getsitepackages()[0])" 2>/dev/null)
+        if [ -n "$SITE_PACKAGES" ]; then
+            rm -rf "$SITE_PACKAGES/proxy" 2>/dev/null
+        fi
     fi
-    if [ -n "$SITE_PACKAGES" ]; then
-        rm -rf "$SITE_PACKAGES/proxy" 2>/dev/null
-    fi
+    
     echo -e "${CYAN}Удаляем из автозапуска...${NC}"
     sed -i '/TG WS Proxy/d' /etc/storage/started_script.sh 2>/dev/null
     sed -i '/S99tgwsproxy/d' /etc/storage/started_script.sh 2>/dev/null
-    sed -i '\|sh /opt/etc/init.d/S99tgwsproxy|d' /etc/storage/started_script.sh 2>/dev/null
-    sed -i '\|/opt/bin/python3 /tmp/web.py|d' /etc/storage/started_script.sh 2>/dev/null
-    /sbin/mtd_storage.sh save > /dev/null 2>&1
-    echo -e "${CYAN}Удаляем скрипт...${NC}"
-    rm -f "$0"
+    
     echo -e "${GREEN}УДАЛЕНИЕ ЗАВЕРШЕНО!${NC}"
-    echo -e "${YELLOW}Скрипт удален. Нажмите Enter для выхода...${NC}"
-    read dummy
+    echo -e "${YELLOW}Скрипт будет удален...${NC}"
+    rm -f "$0"
     exit 0
 }
 
@@ -609,18 +560,11 @@ menu() {
         LOCAL_IP=$(get_router_ip)
         SECRET=$(cat "$SECRET_FILE" 2>/dev/null)
         
-        # Если PID не найден, но процесс запущен - пробуем найти любым способом
-        if [ -z "$PID" ]; then
-            # Последняя попытка - ищем через ps с максимально широким форматом
-            PID=$(ps ww 2>/dev/null | grep -E "python.*proxy|tg-ws-proxy" | grep -v grep | awk '{print $1}' | head -1)
-        fi
-        
-        if [ -z "$PID" ]; then
-            PID="не удалось определить"
+        if [ -z "$PID" ] || [ "$PID" = "1" ]; then
+            PID="активен"
         fi
         
         echo -e "\n${YELLOW}Статус: ${GREEN}● ЗАПУЩЕН${NC} (PID: ${PID})"
-        
         echo -e "\n${CYAN}  Веб-интерфейс:${NC} http://$LOCAL_IP:8081"
         echo -e "\n${CYAN}  Хост:${NC} $LOCAL_IP"
         echo -e "${CYAN}  Порт:${NC} 1443"
@@ -628,8 +572,6 @@ menu() {
         if [ -n "$SECRET" ]; then
             echo -e "${CYAN}  Ключ:${NC} dd$SECRET"
             echo -e "\n${CYAN}  Ссылка:${NC} tg://proxy?server=$LOCAL_IP&port=1443&secret=dd$SECRET"
-        else
-            echo -e "${RED}  Ошибка: секрет не найден!${NC}"
         fi
     else
         echo -e "\n${YELLOW}Статус: ${RED}○ НЕ ЗАПУЩЕН${NC}"
@@ -643,8 +585,8 @@ menu() {
     read choice
     
     case "$choice" in
-        1) install_proxy || PAUSE ;;
-        2) delete_proxy || PAUSE ;;
+        1) install_proxy ;;
+        2) delete_proxy ;;
         3) restart_proxy ;;
         0)
             clear
