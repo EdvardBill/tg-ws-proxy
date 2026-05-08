@@ -3,7 +3,7 @@ SECRET=$(cat /opt/home/admin/proxy_secret.txt 2>/dev/null)
 PORT=$(cat /opt/home/admin/proxy_port.txt 2>/dev/null)
 HOST=$(cat /opt/home/admin/proxy_host.txt 2>/dev/null)
 [ -z "$PORT" ] && PORT=1443
-[ -z "$HOST" ] && HOST="0.0.0.0"
+[ -z "$HOST" ] && HOST=$(nvram get lan_ipaddr 2>/dev/null || echo "192.168.1.1")
 cd /opt/home/admin/tg-ws-proxy
 
 start() {
