@@ -504,7 +504,6 @@ install_proxy() {
     SECRET=$(generate_secret)
     echo "$SECRET" > "$SECRET_FILE"
     echo "1443" > "$PORT_FILE"
-    echo "0.0.0.0" > "$HOST_FILE"
     download_init_script || return 1
     download_web_interface || return 1
     echo -e "${CYAN}Запускаем сервисы...${NC}"
